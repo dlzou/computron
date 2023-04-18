@@ -65,32 +65,27 @@ def run(config):
 
 
 def init_process(
-    port: int,
+    config: Dict,
     rank: int,
     world_size: int,
-    config: Dict,
+    host: str,
+    port: int,
+    backend: str,
     fn: Callable,
-    backend: str = "nccl",
 ):
     """ Initialize the distributed environment. """
-    # os.environ['MASTER_ADDR'] = "127.0.0.1"
-    # os.environ['MASTER_PORT'] = str(port)
-    # dist.init_process_group(backend, rank, world_size)
-    # fn(config)
-    
     colossalai.launch(
         config=config,
         rank=rank,
         world_size=world_size,
-        local_rank=rank,
-        host="127.0.0.1",
+        host=host,
         port=port,
         backend=backend,
     )
     fn()
 
 
-if __name__ == "__main__":
+def run_multi_model():
     num_models = 1
     pp_size = 1
     tp_size = 2
@@ -104,13 +99,14 @@ if __name__ == "__main__":
 
     mp.set_start_method("spawn")
     processes = []
+    host = "127.0.0.1"
     first_port = 29500
     model_ports = [first_port + m for m in range(num_models)]
     for m in range(num_models):
         for rank in range(model_world_size):
             p = mp.Process(
                 target=init_process,
-                args=(model_ports[m], rank, model_world_size, config, run_colossal, "gloo")
+                args=(config, rank, model_world_size, host, model_ports[m], "nccl", run_colossal)
             )
             p.start()
             processes.append(p)
@@ -118,13 +114,18 @@ if __name__ == "__main__":
     for p in processes:
         p.join()
 
-# if __name__ == "__main__":
-#     config = dict(parallel=dict(
-#         pipeline=1,
-#         tensor=dict(size=2, mode='1d'),
-#         data=1,
-#     ))
 
-#     world_size = int(os.environ["WORLD_SIZE"])
-#     rank = int(os.environ["RANK"])
-#     init_process(29500, rank, world_size, config, run_colossal, "gloo")
+def run_single_model():
+    config = dict(parallel=dict(
+        data=1,
+        pipeline=1,
+        tensor=dict(size=2, mode='1d'),
+    ))
+
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    init_process(config, rank, world_size, "127.0.0.1", 29500, "nccl", run_colossal)
+
+
+if __name__ == "__main__":
+    run_multi_model()

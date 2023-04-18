@@ -74,9 +74,9 @@ def main():
     args.device = torch.device("cuda:0")
 
     if args.model == "mlp":
-        import mlp
-        module = mlp
-        config = mlp.MLPConfig
+        import playground._mlp as _mlp
+        module = _mlp
+        config = _mlp.MLPConfig
     else:
         exit(1)
 

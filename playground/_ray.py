@@ -3,7 +3,7 @@ import ray
 import torch
 import torch.nn as nn
 
-import mlp
+import playground._mlp as _mlp
 
 
 @ray.remote(num_gpus=0.5)
@@ -23,8 +23,8 @@ class ModelWorker:
 
 if __name__ == "__main__":
     ray.init(num_gpus=1)
-    m1 = mlp.MLP(32, is_pp_last=True)
-    m2 = mlp.MLP(32, is_pp_last=True)
+    m1 = _mlp.MLP(32, is_pp_last=True)
+    m2 = _mlp.MLP(32, is_pp_last=True)
     w1 = ModelWorker.remote(m1)
     w2 = ModelWorker.remote(m2)
 

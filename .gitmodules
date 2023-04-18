@@ -1,0 +1,3 @@
+[submodule "energonai"]
+	path = energonai
+	url = git@github.com:dlzou/EnergonAI.git

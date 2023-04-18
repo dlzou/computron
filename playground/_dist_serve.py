@@ -8,7 +8,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
-import mpu
+import playground._mpu as _mpu
 
 
 class TwoSeries(nn.Module):
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     assert dist.is_gloo_available(), "GLOO not available"
     # assert dist.is_nccl_available(), "NCCL not available"
     dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
-    mpu.init_mpu(args.num_models, args.pp_size, args.tp_size, "gloo")
+    _mpu.init_mpu(args.num_models, args.pp_size, args.tp_size, "gloo")
 
     if rank == world_size - 1:
         launch_controller()

@@ -8,7 +8,7 @@ import ray.util.collective as rc
 import torch
 import torch.nn as nn
 
-import mlp
+import playground._mlp as _mlp
 
 
 class TwoSeries(nn.Module):
