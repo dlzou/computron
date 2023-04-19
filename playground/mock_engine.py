@@ -134,6 +134,13 @@ async def client(port, num_reqs):
 
 
 if __name__ == "__main__":
+    """Usage:
+    To run engine:
+        python mock_engine.py engine
+    To run client:
+        python mock_engine.py client N_REQUESTS
+    """
+
     port = 29600
     if sys.argv[1] == "client" and len(sys.argv) == 3:
         asyncio.run(client(port, int(sys.argv[2])))
