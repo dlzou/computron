@@ -28,7 +28,7 @@ class OffloadingEngine:
         queue_size: int = 0,
         rpc_disable_shm: bool = True,
     ):
-        self.lock = Lock()
+        # self.lock = Lock()
         self.logger = get_dist_logger('energonai')
         if batch_manager is None:
             self.batch_manager = BatchManager()
@@ -92,8 +92,7 @@ class OffloadingEngine:
 
 
     async def _shutdown(self, loop):
-        tasks = [t for t in asyncio.all_tasks() if t is not
-             asyncio.current_task()]
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         await asyncio.gather(*tasks, return_exceptions=True)
         loop.stop()
@@ -105,7 +104,7 @@ class OffloadingEngine:
         # while len(self.completion_queue) == 0:
         #     await asyncio.sleep(0)
         # obj = self.completion_queue.popleft()
-        # await send_obj(writer, obj)
+        await send_obj(writer, obj)
         writer.close()
         await writer.wait_closed()
 
@@ -118,7 +117,6 @@ class OffloadingEngine:
     
     async def _completion_loop(self):
         pass
-
 
 
 # class AsyncEngine2:

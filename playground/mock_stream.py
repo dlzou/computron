@@ -97,22 +97,6 @@ async def server(port):
 
     async with server:
         await server.serve_forever()
-        
-
-# async def server(port):
-#     reader, writer = await asyncio.open_connection(
-#         '127.0.0.1', port)
-    
-#     while True:
-#         obj = await recv_obj(reader)
-#         print_req(obj)
-
-#         req = GenerationTaskReq()
-#         await send_obj(req, writer)
-    
-    # print("Closing connection")
-    # writer.close()
-    # await writer.wait_closed()
 
 
 if __name__ == "__main__":
