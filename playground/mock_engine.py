@@ -112,8 +112,8 @@ async def client(port):
     req = GenerationTaskReq()
     await send_obj(writer, req)
     
-    # obj = await recv_obj(reader)
-    # print_req(obj)
+    obj = await recv_obj(reader)
+    print_req(obj)
     
     print("Closing connection")
     writer.close()
@@ -124,7 +124,7 @@ async def client(port):
 
 if __name__ == "__main__":
     port = 29600
-    if sys.argv[1] == "controller":
+    if sys.argv[1] == "client":
         asyncio.run(client(port))
     elif sys.argv[1] == "engine":
         engine = Engine(port)
