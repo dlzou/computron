@@ -1,7 +1,13 @@
+from dataclasses import dataclass
+from typing import Any
+
 import colossalai.nn as col_nn
 from colossalai.utils import print_rank_0
+from energonai.batch_mgr import BatchManager, SubmitEntry
+from pydantic import BaseModel
 import torch
 import torch.nn as nn
+
 
 class MLP(nn.Module):
     def __init__(self, dim: int = 256):
@@ -22,3 +28,21 @@ class MLP(nn.Module):
         print_rank_0(f'Output of the second linear layer: {x.shape}')
         x = self.dropout(x)
         return x
+
+
+@dataclass
+class MLPRequest(BaseModel):
+    data: Any
+
+
+def unpack_request(req: MLPRequest) -> SubmitEntry:
+    return SubmitEntry(id(req.data), req.data)
+
+
+@dataclass
+class MLPResponse(BaseModel):
+    output: Any
+
+
+def pack_response(output: Any) -> MLPResponse:
+    return MLPResponse(output)

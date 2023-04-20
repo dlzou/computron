@@ -22,17 +22,22 @@ class OffloadEntry:
 
 
 class OffloadingEngine:
+    """
+    Adapted from https://github.com/hpcaitech/EnergonAI/blob/main/energonai/engine.py
+    with significant chagnes.
+    """
+
     def __init__(
         self,
         tp_world_size: int,
         pp_world_size: int, 
         master_host: str,
         rpc_port: int,
-        n_proc_per_node: int,
         request_port: int,
         request_type: BaseModel,
         unpack_request_fn: Callable,
         pack_response_fn: Callable,
+        n_proc_per_node: int,
         batch_manager: Optional[BatchManager] = None,
         pipe_size: int = 1,
         queue_size: int = 0,
@@ -91,7 +96,7 @@ class OffloadingEngine:
         self._start()
 
 
-    async def _start(self):
+    def _start(self):
         loop = asyncio.new_event_loop()
         shutdown_signals = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
         for s in shutdown_signals:
@@ -107,6 +112,11 @@ class OffloadingEngine:
 
     async def _shutdown(self, loop):
         # TODO: shutdown workers
+        Terminator.shield()
+        for i in range(self.world_size):
+            trpc.rpc_sync(f'worker{i}', Terminator.terminate)
+        trpc.shutdown()
+
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         await asyncio.gather(*tasks, return_exceptions=True)
