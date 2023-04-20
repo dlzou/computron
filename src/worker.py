@@ -32,16 +32,14 @@ class OffloadingWorker(Worker):
             while True:
                 try:
                     entry = self.input_pipe.recv_nowait()
-                    if hasattr(entry, "batch"):
-                        # Handle as TaskEntry
+                    if isinstance(entry, TaskEntry):
                         with torch.inference_mode():
                             outputs = self._forward(entry.batch)
                         self.output_pipe.send(TaskEntry(entry.uids, outputs))
-                    elif hasattr(entry, "on_device"):
-                        # Handle as SwapEntry
-                        if entry.on_device:
-                            self.model.to("cuda")
-                        else:
-                            self.model.to("cpu")
+                    # elif hasattr(entry, OffloadEntry):
+                    #     if entry.on_device:
+                    #         self.model.to("cuda")
+                    #     else:
+                    #         self.model.to("cpu")
                 except RuntimeError:
                     time.sleep(0.01)

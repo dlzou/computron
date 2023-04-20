@@ -10,11 +10,11 @@ from worker import OffloadingWorker
 from models.mlp import MLP
 
 
-def launch_swap_workers():
+def launch_offloading_workers():
     pass
 
 
-def launch_swap_engine(
+def launch_offloading_engine(
     tp_world_size: int,
     pp_world_size: int,
     master_host: str,
@@ -33,7 +33,7 @@ def launch_swap_engine(
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
     n_proc_per_node = world_size // n_nodes
-    launch_swap_workers(
+    launch_offloading_workers(
         tp_world_size,
         pp_world_size,
         master_host,

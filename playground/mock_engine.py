@@ -44,7 +44,6 @@ def print_req(req: GenerationTaskReq):
 class Engine:
     def __init__(self, request_port):
         self.request_port = request_port
-        self.submit_thread = None
         self.submit_queue = deque()
         self.mock_pipe = deque()
         self.completion_event = {}
@@ -96,14 +95,13 @@ class Engine:
                 print_req(req)
                 self.mock_pipe.append(req)
             else:
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.01)
     
     async def _completion_loop(self):
         while True:
             if len(self.mock_pipe) == 0:
                 await asyncio.sleep(0.01)
                 continue
-            # await asyncio.sleep(0.5) # Computation time
             req = self.mock_pipe.popleft()
             self.completion_map[req.uid] = req
             self.completion_event[req.uid].set()
