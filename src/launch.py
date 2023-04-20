@@ -7,6 +7,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 
 from batch import BatchManagerForGeneration
+from controller import Controller
 from engine import OffloadingEngine
 from worker import OffloadingWorker
 from models import mlp
@@ -72,6 +73,7 @@ def launch_offloading_engine(
 
 
 def launch_multi_model(
+    model_ids: List[str],
     request_types: List[BaseModel],
     unpack_request_fns: List[Callable],
     pack_response_fns: List[Callable],
@@ -81,6 +83,7 @@ def launch_multi_model(
     assert len(unpack_request_fns) == num_models
     assert len(pack_response_fns) == num_models
 
+    # TODO: make host and ports arguments
     tp_world_size = 2
     pp_world_size = 1
     master_host = "localhost" # "127.0.0.1"
@@ -96,6 +99,7 @@ def launch_multi_model(
     rpc_disable_shm = True
     model_kwargs = {}
 
+    ctlr = Controller()
     mp.set_start_method("spawn")
     processes = []
     for m in range(num_models):
@@ -121,15 +125,18 @@ def launch_multi_model(
             ),
             kwargs=model_kwargs,
         )
-        p.start()
         processes.append(p)
+        p.start()
 
-    for p in processes:
-        p.join()
+        ctlr.register_model(model_ids[m], (master_host, request_ports[m]))
+
+    return ctlr
 
 
 if __name__ == "__main__":
+    # Basic launch and shutdown test
     launch_multi_model(
+        model_ids=["mlp0", "mlp1"],
         request_types=[mlp.MLPRequest, mlp.MLPRequest],
         unpack_request_fns=[mlp.unpack_request, mlp.unpack_request],
         pack_response_fns=[mlp.pack_response, mlp.pack_response],
