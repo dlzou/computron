@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import time
 from typing import Any
 
 from colossalai.utils import print_rank_0
@@ -15,6 +16,7 @@ class Echo(nn.Module):
 
     def forward(self, x):
         print_rank_0("Executing echo model")
+        time.sleep(1)
         return x
 
 
