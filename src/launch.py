@@ -1,10 +1,9 @@
-from typing import Any, Callable, Dict, Optional, List
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
-from energonai import BatchManager, launch_engine
-from energonai.worker import launch_workers
+from energonai import BatchManager, SubmitEntry
 from pydantic import BaseModel
 import torch.multiprocessing as mp
-import torch.nn as nn
 
 from batch import BatchManagerForGeneration
 from controller import Controller
@@ -13,132 +12,127 @@ from worker import OffloadingWorker
 from models import mlp
 
 
-def launch_offloading_workers():
-    pass
+@dataclass
+class ModelConfig:
+    model_id: str
+    master_host: str
+    master_port: int
+    rpc_port: int
+    request_port: int
+    request_type: BaseModel
+    unpack_request_fn: Callable[[BaseModel], SubmitEntry]
+    pack_response_fn: Callable[[Any], BaseModel]
+    model_fn: Callable
+    batch_manager: Optional[BatchManager] = None
+    pipe_size: int = 1
+    queue_size: int = 0
+    rpc_disable_shm: bool = True
+    model_kwargs: Dict[str, Any] = field(default_factory=dict)
 
 
-def launch_offloading_engine(
+def launch_offloading_workers(
+    config: ModelConfig,
     tp_world_size: int,
     pp_world_size: int,
-    master_host: str,
-    master_port: int,
-    rpc_port: int,
-    request_port: int,
-    request_type: BaseModel,
-    unpack_request_fn: Callable,
-    pack_response_fn: Callable,
-    model_fn: Callable[[Any], nn.Module],
-    n_nodes: int = 1,
-    node_rank: int = 0,
-    batch_manager: Optional[BatchManager] = None,
-    pipe_size: int = 1,
-    queue_size: int = 0,
-    rpc_disable_shm:
-    bool = True,
-    **model_kwargs: Any,
+    n_proc_per_node: int = 1,
+    node_rank: int = 0, 
+):
+    ctx = mp.get_context("spawn")
+    procs = []
+    for i in range(n_proc_per_node):
+        rank = n_proc_per_node * node_rank + i
+        p = ctx.Process(
+            target=OffloadingWorker,
+            args=(
+                rank,
+                tp_world_size,
+                pp_world_size,
+                config.master_host,
+                config.master_port,
+                config.rpc_port,
+                n_proc_per_node,
+                config.model_fn,
+                config.pipe_size,
+                config.rpc_disable_shm,
+            ),
+            kwargs=config.model_kwargs,
+        )
+        procs.append(p)
+        p.start()
+
+
+def launch_multi_model(
+    model_configs: List[ModelConfig],
+    tp_world_size: int,
+    pp_world_size: int,
+    n_nodes: int,
+    node_rank: int,
 ) -> Optional[OffloadingEngine]:
+    num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
     n_proc_per_node = world_size // n_nodes
 
-    launch_workers(
-        tp_world_size,
-        pp_world_size,
-        master_host,
-        master_port,
-        rpc_port,
-        model_fn,
-        n_proc_per_node,
-        node_rank,
-        pipe_size,
-        **model_kwargs,
-    )
+    ctx = mp.get_context("spawn")
+    procs = []
+    for i in range(num_models):
+        config = model_configs[i]
+        launch_offloading_workers(config, tp_world_size, pp_world_size, n_proc_per_node, node_rank)
+        if node_rank == 0:
+            p = ctx.Process(
+                target=OffloadingEngine,
+                args=(
+                    tp_world_size,
+                    pp_world_size,
+                    config.master_host,
+                    config.rpc_port,
+                    config.request_port,
+                    config.request_type,
+                    config.unpack_request_fn,
+                    config.pack_response_fn,
+                    n_proc_per_node,
+                    config.batch_manager,
+                    config.pipe_size,
+                    config.queue_size,
+                    config.rpc_disable_shm,
+                )
+            )
+            procs.append(p)
+            p.start()
+
     if node_rank == 0:
-        engine = OffloadingEngine(
-            tp_world_size,
-            pp_world_size,
-            master_host,
-            rpc_port,
-            request_port,
-            request_type,
-            unpack_request_fn,
-            pack_response_fn,
-            n_proc_per_node,
-            batch_manager,
-            pipe_size,
-            queue_size,
-            rpc_disable_shm,
-        )
-        return engine
+        ctlr = Controller()
+        for i in range(num_models):
+            config = model_configs[i]
+            ctlr.register_model(config.model_id, config.master_host, config.request_port)
+        return ctlr
 
-
-def launch_multi_model(
-    model_ids: List[str],
-    request_types: List[BaseModel],
-    unpack_request_fns: List[Callable],
-    pack_response_fns: List[Callable],
-    model_fns: List[Callable],
-):
-    num_models = len(request_types)
-    assert len(unpack_request_fns) == num_models
-    assert len(pack_response_fns) == num_models
-
-    # TODO: make host and ports arguments
-    tp_world_size = 2
-    pp_world_size = 1
-    master_host = "localhost" # "127.0.0.1"
-    first_port = 29600
-    master_ports = [(first_port + 3*m) for m in range(num_models)]
-    rpc_ports = [(first_port + 3*m + 1) for m in range(num_models)]
-    request_ports = [(first_port + 3*m + 2) for m in range(num_models)]
-    n_nodes = 1
-    node_rank = 0
-    batch_manager = BatchManager()
-    pipe_size = 1
-    queue_size = 1
-    rpc_disable_shm = True
-    model_kwargs = {}
-
-    ctlr = Controller()
-    mp.set_start_method("spawn")
-    processes = []
-    for m in range(num_models):
-        p = mp.Process(
-            target=launch_offloading_engine,
-            args=(
-                tp_world_size,
-                pp_world_size,
-                master_host,
-                master_ports[m],
-                rpc_ports[m],
-                request_ports[m],
-                request_types[m],
-                unpack_request_fns[m],
-                pack_response_fns[m],
-                model_fns[m],
-                n_nodes,
-                node_rank,
-                batch_manager,
-                pipe_size,
-                queue_size,
-                rpc_disable_shm,
-            ),
-            kwargs=model_kwargs,
-        )
-        processes.append(p)
-        p.start()
-
-        ctlr.register_model(model_ids[m], (master_host, request_ports[m]))
-
-    return ctlr
+    # TODO: add signal handler that syncs with engines and workers
 
 
 if __name__ == "__main__":
     # Basic launch and shutdown test
+    num_models = 2
+    first_port = 29600
+    configs = []
+    for i in range(num_models):
+        config = ModelConfig(
+            model_id=f"mlp{i}",
+            master_host="localhost",
+            master_port=(first_port + 3*i),
+            rpc_port=(first_port + 3*i + 1),
+            request_port=(first_port + 3*i + 2),
+            request_type=mlp.MLPRequest,
+            unpack_request_fn=mlp.unpack_request,
+            pack_response_fn=mlp.pack_response,
+            model_fn=mlp.MLP,
+        )
+        configs.append(config)
+
     launch_multi_model(
-        model_ids=["mlp0", "mlp1"],
-        request_types=[mlp.MLPRequest, mlp.MLPRequest],
-        unpack_request_fns=[mlp.unpack_request, mlp.unpack_request],
-        pack_response_fns=[mlp.pack_response, mlp.pack_response],
-        model_fns=[mlp.MLP, mlp.MLP]
+        configs,
+        tp_world_size=2,
+        pp_world_size=1,
+        n_nodes=1,
+        node_rank=0,
     )

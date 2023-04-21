@@ -18,7 +18,6 @@ class Echo(nn.Module):
         return x
 
 
-@dataclass
 class EchoRequest(BaseModel):
     data: Any
 
@@ -27,10 +26,9 @@ def unpack_request(req: EchoRequest) -> SubmitEntry:
     return SubmitEntry(id(req.data), req.data)
 
 
-@dataclass
 class EchoResponse(BaseModel):
     output: Any
 
 
 def pack_response(output: Any) -> EchoResponse:
-    return EchoResponse(output)
+    return EchoResponse(output=output)

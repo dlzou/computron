@@ -10,6 +10,7 @@ from utils import send_obj, recv_obj
 
 
 class Controller:
+
     def __init__(self):
         self.models: Dict[str, Tuple[str, int]] = {}
         # TODO: state for offloading algorithm

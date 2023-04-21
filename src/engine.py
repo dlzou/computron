@@ -15,6 +15,10 @@ import torch.distributed.rpc as trpc
 from utils import send_obj, recv_obj
 
 
+class QueueFullError(Exception):
+    pass
+
+
 @dataclass
 class OffloadEntry:
     uid: Hashable
@@ -73,13 +77,12 @@ class OffloadingEngine:
             worker_pp_rank = pipe.recv()
             if worker_pp_rank == 0:
                 self.submit_pipes.append(
-                    Pipe(f'm_to_{i}', 'master', f'worker{i}',max_size=pipe_size)
+                    Pipe(f'm_to_{i}', 'master', f'worker{i}', max_size=pipe_size)
                 )
             if worker_pp_rank == pp_world_size - 1:
                 self.completion_pipes.append(pipe)
 
-        assert queue_size > 0, "queue_size must be at least 1"
-        self.queue_size = queue_size
+        self.queue_size = queue_size # 0 means no limit
         self.submit_queue: Deque[SubmitEntry] = deque()
         self.batch_info: Dict[Hashable, Any] = {}
         self.timer_info: Dict[Hashable, Tuple[int, float]] = {}
@@ -95,12 +98,12 @@ class OffloadingEngine:
         self.logger.info('Engine start')
         self._start()
 
-
     def _start(self):
         loop = asyncio.new_event_loop()
         shutdown_signals = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
         for s in shutdown_signals:
             loop.add_signal_handler(s, lambda: loop.create_task(self._shutdown(loop)))
+        # TODO: add exception handler
         try:
             loop.create_task(self._request_server())
             loop.create_task(self._submit_loop())
@@ -108,7 +111,6 @@ class OffloadingEngine:
             loop.run_forever()
         finally:
             loop.close()
-
 
     async def _shutdown(self, loop):
         # TODO: shutdown workers
@@ -122,11 +124,13 @@ class OffloadingEngine:
         await asyncio.gather(*tasks, return_exceptions=True)
         loop.stop()
 
-
     async def _handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         req = await recv_obj(reader)
         if isinstance(req, self.request_type):
             entry: SubmitEntry = self.unpack_request_fn(req)
+            assert entry.uid not in self.completion_map
+            if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
+                raise QueueFullError(f'Submit queue full, size: {self.queue_size}')
             self.completion_event[entry.uid] = asyncio.Event()
             self.submit_queue.append(entry)
             await self.completion_event[entry.uid].wait()
@@ -141,7 +145,6 @@ class OffloadingEngine:
         writer.close()
         await writer.wait_closed()
 
-
     async def _request_server(self):
         server = await asyncio.start_server(
             lambda r, w: self._handle_request(r, w),
@@ -150,7 +153,6 @@ class OffloadingEngine:
         )
         async with server:
             await server.serve_forever()
-
 
     async def _submit_loop(self):
         while True:
@@ -163,7 +165,6 @@ class OffloadingEngine:
                     pipe.send(task_entry)
             else:
                 await asyncio.sleep(0.01)
-    
 
     async def _completion_loop(self):
         received_data: Dict[int, Any] = {}
@@ -181,6 +182,7 @@ class OffloadingEngine:
                 batch_info = self.batch_info.pop(task_entries[0].uids)
                 for uid, output in self.batch_manager.split_batch(task_entries[0], **batch_info):
                     self.completion_map[uid] = output
+                    self.completion_event[uid].set()
                 batch_size, start_time = self.timer_info.pop(task_entries[0].uids)
                 self.logger.info(f'batch size: {batch_size}, time: {time.time() -start_time:.3f}')
             else:

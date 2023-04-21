@@ -30,7 +30,6 @@ class MLP(nn.Module):
         return x
 
 
-@dataclass
 class MLPRequest(BaseModel):
     data: Any
 
@@ -39,10 +38,9 @@ def unpack_request(req: MLPRequest) -> SubmitEntry:
     return SubmitEntry(id(req.data), req.data)
 
 
-@dataclass
 class MLPResponse(BaseModel):
     output: Any
 
 
 def pack_response(output: Any) -> MLPResponse:
-    return MLPResponse(output)
+    return MLPResponse(output=output)
