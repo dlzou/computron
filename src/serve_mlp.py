@@ -24,7 +24,11 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
+    tp_world_size = 1
+    pp_world_size = 2
+    num_chunks = 1
     first_port = 29600
+
     configs = []
     for i in range(num_models):
         config = ModelConfig(
@@ -37,13 +41,14 @@ if __name__ == "__main__":
             unpack_request_fn=mlp.unpack_request,
             pack_response_fn=mlp.pack_response,
             model_fn=partial(mlp.MLP, dim=32),
+            model_exec_seq=mlp.exec_seq,
         )
         configs.append(config)
 
     ctlr = launch_multi_model(
         configs,
-        tp_world_size=2,
-        pp_world_size=1,
+        tp_world_size=tp_world_size,
+        pp_world_size=pp_world_size,
         n_nodes=1,
         node_rank=0,
     )

@@ -1,6 +1,7 @@
 import time
-from typing import Any, Callable
+from typing import Any, Callable, List
 
+from colossalai.pipeline.pipelinable import PipelinableContext
 from energonai.task import TaskEntry
 from energonai.worker import Worker
 import torch
@@ -18,6 +19,7 @@ class OffloadingWorker(Worker):
         rpc_port: int,
         n_proc_per_node: int,
         model_fn: Callable[[Any], nn.Module],
+        model_exec_seq: List[Any],
         pipe_size: int = 1,
         rpc_disable_shm: bool = True,
         **model_kwargs: Any
@@ -26,6 +28,16 @@ class OffloadingWorker(Worker):
             rank, tp_world_size, pp_world_size, master_host, master_port, rpc_port, n_proc_per_node,
             model_fn, pipe_size, rpc_disable_shm, **model_kwargs
         )
+        if model_exec_seq is not None:
+            pctx = PipelinableContext()
+            with pctx:
+                model_fn(**model_kwargs)
+            pctx.to_layer_list(model_exec_seq)
+            self.model: nn.Module = pctx.partition(
+                num_chunks=1,
+                pipeline_size=pp_world_size,
+                rank=self.pp_rank,
+            ).cuda()
 
     def _start(self):
         with self._lifespan():

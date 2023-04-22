@@ -8,7 +8,7 @@ from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple
 from colossalai.logging import get_dist_logger
 from energonai import BatchManager, SubmitEntry, TaskEntry
 from energonai.pipe import Pipe
-from energonai.utils import Terminator, build_device_maps, use_lock
+from energonai.utils import build_device_maps, Terminator
 from pydantic import BaseModel
 import torch.distributed.rpc as trpc
 

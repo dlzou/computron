@@ -30,6 +30,9 @@ class MLP(nn.Module):
         return x
 
 
+exec_seq = ["dense_1", "activation", "dense_2", "dropout"]
+
+
 class MLPRequest(BaseModel):
     data: Any
 
