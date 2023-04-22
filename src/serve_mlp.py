@@ -4,6 +4,7 @@ import time
 
 import torch
 
+# Should install as package instead
 from launch import launch_multi_model, ModelConfig
 from models import mlp
 
@@ -14,19 +15,19 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        data = torch.ones((32,)) * i
+        data = torch.ones((256,)) * i
         req = mlp.MLPRequest(data=data)
         resp = await ctlr.handle_request(f"mlp{i % 2}", req)
         print(f"Response time {i}: {time.time() - start_time}")
-        print(resp)
+        # print(resp)
     print(f"Total time: {time.time() - start_time}")
 
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 1
-    pp_world_size = 2
-    num_chunks = 1
+    tp_world_size = 2
+    pp_world_size = 1
+    # num_chunks = 1
     first_port = 29600
 
     configs = []
@@ -40,7 +41,7 @@ if __name__ == "__main__":
             request_type=mlp.MLPRequest,
             unpack_request_fn=mlp.unpack_request,
             pack_response_fn=mlp.pack_response,
-            model_fn=partial(mlp.MLP, dim=32),
+            model_fn=partial(mlp.MLP, dim=256),
             model_exec_seq=mlp.exec_seq,
         )
         configs.append(config)
@@ -54,4 +55,4 @@ if __name__ == "__main__":
     )
 
     time.sleep(15) # Wait for engine to start
-    asyncio.run(make_requests(6))
+    asyncio.run(make_requests(20))

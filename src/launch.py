@@ -5,7 +5,6 @@ from energonai import BatchManager, SubmitEntry
 from pydantic import BaseModel
 import torch.multiprocessing as mp
 
-from batch import BatchManagerForGeneration
 from controller import Controller
 from engine import OffloadingEngine
 from worker import OffloadingWorker
@@ -24,7 +23,8 @@ class ModelConfig:
     pack_response_fn: Callable[[Any], BaseModel]
     model_fn: Callable
     # Can only partition for PP once colossalai is launched and gpc is set.
-    # Lazy solution here is to pass execution sequence to workers so they can do the partitioning.
+    # Lazy solution here is to pass the execution sequence to workers and let them partition.
+    # If model_exec_seq = None, use model_fn as given.
     model_exec_seq: Optional[List[Any]] = None
     batch_manager: Optional[BatchManager] = None
     pipe_size: int = 1

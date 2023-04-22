@@ -19,6 +19,10 @@ class QueueFullError(Exception):
     pass
 
 
+class OffloadRequest(BaseModel):
+    on_device: bool
+
+
 @dataclass
 class OffloadEntry:
     uid: Hashable
