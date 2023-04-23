@@ -3,7 +3,7 @@ from collections import deque
 from dataclasses import dataclass
 import signal
 import time
-from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple
+from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple, Union
 
 from colossalai.logging import get_dist_logger
 from energonai import BatchManager, SubmitEntry, TaskEntry
@@ -12,21 +12,12 @@ from energonai.utils import build_device_maps, Terminator
 from pydantic import BaseModel
 import torch.distributed.rpc as trpc
 
+from offload import OffloadEntry, OffloadRequest, OffloadResponse
 from utils import send_obj, recv_obj
 
 
 class QueueFullError(Exception):
     pass
-
-
-class OffloadRequest(BaseModel):
-    on_device: bool
-
-
-@dataclass
-class OffloadEntry:
-    uid: Hashable
-    on_device: bool
 
 
 class OffloadingEngine:
@@ -38,7 +29,8 @@ class OffloadingEngine:
     def __init__(
         self,
         tp_world_size: int,
-        pp_world_size: int, 
+        pp_world_size: int,
+        model_id: str,
         master_host: str,
         rpc_port: int,
         request_port: int,
@@ -58,6 +50,7 @@ class OffloadingEngine:
             assert isinstance(batch_manager, BatchManager)
             self.batch_manager = batch_manager
         self.world_size = tp_world_size * pp_world_size
+        self.model_id = model_id
 
         rpc_options = {}
         if rpc_disable_shm:
@@ -87,7 +80,7 @@ class OffloadingEngine:
                 self.completion_pipes.append(pipe)
 
         self.queue_size = queue_size # 0 means no limit
-        self.submit_queue: Deque[SubmitEntry] = deque()
+        self.submit_queue: Deque[Union[SubmitEntry, OffloadEntry]] = deque()
         self.batch_info: Dict[Hashable, Any] = {}
         self.timer_info: Dict[Hashable, Tuple[int, float]] = {}
         self.completion_map: Dict[Hashable, Any] = {}
@@ -99,7 +92,7 @@ class OffloadingEngine:
         self.unpack_request_fn: Callable = unpack_request_fn
         self.pack_response_fn: Callable = pack_response_fn
 
-        self.logger.info('Engine start')
+        self.logger.info(F"{self.model_id} engine started")
         self._start()
 
     def _start(self):
@@ -132,19 +125,23 @@ class OffloadingEngine:
         req = await recv_obj(reader)
         if isinstance(req, self.request_type):
             entry: SubmitEntry = self.unpack_request_fn(req)
-            assert entry.uid not in self.completion_map
-            if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
-                raise QueueFullError(f'Submit queue full, size: {self.queue_size}')
-            self.completion_event[entry.uid] = asyncio.Event()
-            self.submit_queue.append(entry)
-            await self.completion_event[entry.uid].wait()
+        elif isinstance(req, OffloadRequest):
+            # entry: SubmitEntry = SubmitEntry(id(req), {"_loaded": req.loaded})
+            entry: OffloadEntry = OffloadEntry(id(req), req.loaded)
+        assert entry.uid not in self.completion_map
+        if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
+            raise QueueFullError(f'Submit queue full, size: {self.queue_size}')
+        self.completion_event[entry.uid] = asyncio.Event()
+        self.submit_queue.append(entry)
+        await self.completion_event[entry.uid].wait()
 
-            del self.completion_event[entry.uid]
-            output = self.completion_map.pop(entry.uid)
+        del self.completion_event[entry.uid]
+        output = self.completion_map.pop(entry.uid)
+        if isinstance(entry, SubmitEntry):
             resp = self.pack_response_fn(output)
-            await send_obj(writer, resp)
-        
-        # TODO: handle OffloadRequest
+        elif isinstance(entry, OffloadEntry):
+            resp = OffloadResponse(success=True)
+        await send_obj(writer, resp)
 
         writer.close()
         await writer.wait_closed()
@@ -161,12 +158,14 @@ class OffloadingEngine:
     async def _submit_loop(self):
         while True:
             if len(self.submit_queue) > 0:
-                # TODO: handle OffloadEntry
-                task_entry, batch_info = self.batch_manager.make_batch(self.submit_queue)
-                self.batch_info[task_entry.uids] = batch_info
-                self.timer_info[task_entry.uids] = (len(task_entry.uids), time.time())
+                entry, batch_info = self.batch_manager.make_batch(self.submit_queue)
+                if isinstance(entry, TaskEntry):
+                    self.batch_info[entry.uids] = batch_info
+                    self.timer_info[entry.uids] = (len(entry.uids), time.time())
+                # elif isinstance(entry, OffloadEntry):
+                #     self.timer_info[entry.uid] = (len(entry.uid), time.time())
                 for pipe in self.submit_pipes:
-                    pipe.send(task_entry)
+                    pipe.send(entry)
             else:
                 await asyncio.sleep(0.01)
 
@@ -180,14 +179,28 @@ class OffloadingEngine:
                     except RuntimeError:
                         pass
             if len(received_data) == len(self.completion_pipes):
-                # TODO: validate they are all the same
-                task_entries: List[TaskEntry] = list(map(lambda k: received_data[k], sorted(received_data.keys())))
+                # TODO: validate all entries are the same
+                entries: List[Union[TaskEntry, OffloadEntry]] = list(map(
+                    lambda k: received_data[k],
+                    sorted(received_data.keys()),
+                ))
                 received_data.clear()
-                batch_info = self.batch_info.pop(task_entries[0].uids)
-                for uid, output in self.batch_manager.split_batch(task_entries[0], **batch_info):
-                    self.completion_map[uid] = output
-                    self.completion_event[uid].set()
-                batch_size, start_time = self.timer_info.pop(task_entries[0].uids)
-                self.logger.info(f'batch size: {batch_size}, time: {time.time() -start_time:.3f}')
+                entry_0 = entries[0]
+                if isinstance(entry_0, TaskEntry): 
+                    batch_info = self.batch_info.pop(entry_0.uids)
+                    for uid, output in self.batch_manager.split_batch(entry_0, **batch_info):
+                        self.completion_map[uid] = output
+                        self.completion_event[uid].set()
+                    batch_size, start_time = self.timer_info.pop(entry_0.uids)
+                    self.logger.info(
+                        f"{self.model_id} batch size: {batch_size}, time: {time.time() -start_time:.3f}"
+                    )
+                elif isinstance(entry_0, OffloadEntry):
+                    self.completion_map[entry_0.uid] = entry_0.loaded
+                    self.completion_event[entry_0.uid].set()
+                    # batch_size, start_time = self.timer_info.pop(entry_0.uid)
+                    self.logger.info(
+                        f"{self.model_id} loaded state: {entry_0.loaded}"
+                    )
             else:
                 await asyncio.sleep(0.01)

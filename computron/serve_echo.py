@@ -2,8 +2,8 @@ import asyncio
 import time
 
 # Should install as package instead
+import echo
 from launch import launch_multi_model, ModelConfig
-from models import echo
 
 
 ctlr = None

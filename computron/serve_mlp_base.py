@@ -6,7 +6,7 @@ from energonai import launch_engine
 import torch
 
 # Should install as package instead
-from models import mlp
+import mlp 
 
 
 engine = None

@@ -6,8 +6,7 @@ import torch
 
 # Should install as package instead
 from launch import launch_multi_model, ModelConfig
-from models import mlp
-
+import mlp
 
 ctlr = None
 
@@ -43,6 +42,7 @@ if __name__ == "__main__":
             pack_response_fn=mlp.pack_response,
             model_fn=partial(mlp.MLP, dim=256),
             model_exec_seq=mlp.exec_seq,
+            batch_manager=mlp.MLPBatchManager(max_batch_size=1),
         )
         configs.append(config)
 
@@ -55,4 +55,4 @@ if __name__ == "__main__":
     )
 
     time.sleep(15) # Wait for engine to start
-    asyncio.run(make_requests(20))
+    asyncio.run(make_requests(10))

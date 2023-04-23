@@ -25,7 +25,7 @@ class EchoRequest(BaseModel):
 
 
 def unpack_request(req: EchoRequest) -> SubmitEntry:
-    return SubmitEntry(id(req.data), req.data)
+    return SubmitEntry(id(req), req.data)
 
 
 class EchoResponse(BaseModel):

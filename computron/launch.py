@@ -8,7 +8,6 @@ import torch.multiprocessing as mp
 from controller import Controller
 from engine import OffloadingEngine
 from worker import OffloadingWorker
-from models import mlp
 
 
 @dataclass
@@ -88,6 +87,7 @@ def launch_multi_model(
                 args=(
                     tp_world_size,
                     pp_world_size,
+                    config.model_id,
                     config.master_host,
                     config.rpc_port,
                     config.request_port,
@@ -112,31 +112,3 @@ def launch_multi_model(
         return ctlr
 
     # TODO: add signal handler that syncs with engines and workers
-
-
-if __name__ == "__main__":
-    # Basic launch and shutdown test
-    num_models = 2
-    first_port = 29600
-    configs = []
-    for i in range(num_models):
-        config = ModelConfig(
-            model_id=f"mlp{i}",
-            master_host="localhost",
-            master_port=(first_port + 3*i),
-            rpc_port=(first_port + 3*i + 1),
-            request_port=(first_port + 3*i + 2),
-            request_type=mlp.MLPRequest,
-            unpack_request_fn=mlp.unpack_request,
-            pack_response_fn=mlp.pack_response,
-            model_fn=mlp.MLP,
-        )
-        configs.append(config)
-
-    launch_multi_model(
-        configs,
-        tp_world_size=2,
-        pp_world_size=1,
-        n_nodes=1,
-        node_rank=0,
-    )
