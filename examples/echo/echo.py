@@ -3,7 +3,7 @@ import time
 from typing import Any
 
 from colossalai.utils import print_rank_0
-from energonai.batch_mgr import BatchManager, SubmitEntry
+from energonai import SubmitEntry
 from pydantic import BaseModel
 import torch
 import torch.nn as nn
@@ -13,6 +13,7 @@ class Echo(nn.Module):
     def __init__(self):
         super().__init__()
         print_rank_0("Intializing echo model")
+        self.param = torch.zeros((1,))
 
     def forward(self, x):
         print_rank_0("Executing echo model")
@@ -25,7 +26,7 @@ class EchoRequest(BaseModel):
 
 
 def unpack_request(req: EchoRequest) -> SubmitEntry:
-    return SubmitEntry(id(req.data), req.data)
+    return SubmitEntry(id(req), req.data)
 
 
 class EchoResponse(BaseModel):

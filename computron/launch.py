@@ -5,10 +5,9 @@ from energonai import BatchManager, SubmitEntry
 from pydantic import BaseModel
 import torch.multiprocessing as mp
 
-from controller import Controller
-from engine import OffloadingEngine
-from worker import OffloadingWorker
-from models import mlp
+from computron.controller import Controller
+from computron.engine import OffloadingEngine
+from computron.worker import OffloadingWorker
 
 
 @dataclass
@@ -71,6 +70,7 @@ def launch_multi_model(
     pp_world_size: int,
     n_nodes: int,
     node_rank: int,
+    controller_kwargs: Dict[str, Any],
 ) -> Optional[OffloadingEngine]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
@@ -88,6 +88,7 @@ def launch_multi_model(
                 args=(
                     tp_world_size,
                     pp_world_size,
+                    config.model_id,
                     config.master_host,
                     config.rpc_port,
                     config.request_port,
@@ -105,38 +106,10 @@ def launch_multi_model(
             p.start()
 
     if node_rank == 0:
-        ctlr = Controller()
+        ctlr = Controller(**controller_kwargs)
         for i in range(num_models):
             config = model_configs[i]
             ctlr.register_model(config.model_id, config.master_host, config.request_port)
         return ctlr
 
     # TODO: add signal handler that syncs with engines and workers
-
-
-if __name__ == "__main__":
-    # Basic launch and shutdown test
-    num_models = 2
-    first_port = 29600
-    configs = []
-    for i in range(num_models):
-        config = ModelConfig(
-            model_id=f"mlp{i}",
-            master_host="localhost",
-            master_port=(first_port + 3*i),
-            rpc_port=(first_port + 3*i + 1),
-            request_port=(first_port + 3*i + 2),
-            request_type=mlp.MLPRequest,
-            unpack_request_fn=mlp.unpack_request,
-            pack_response_fn=mlp.pack_response,
-            model_fn=mlp.MLP,
-        )
-        configs.append(config)
-
-    launch_multi_model(
-        configs,
-        tp_world_size=2,
-        pp_world_size=1,
-        n_nodes=1,
-        node_rank=0,
-    )

@@ -14,6 +14,8 @@ import torch
 import torch.distributed.rpc as trpc
 import torch.nn as nn
 
+from computron.offload import OffloadEntry
+
 
 class OffloadingWorker(Worker):
     def __init__(
@@ -50,9 +52,9 @@ class OffloadingWorker(Worker):
                 num_chunks=1,
                 pipeline_size=pp_world_size,
                 rank=self.pp_rank,
-            )#.to("cpu")
+            ).to("cpu")
         else:
-            self.model: nn.Module = model_fn(**model_kwargs)#.to("cpu")
+            self.model: nn.Module = model_fn(**model_kwargs).to("cpu")
 
         self.rpc_name = f'worker{self.global_rank}'
         rpc_options = {}
@@ -97,10 +99,11 @@ class OffloadingWorker(Worker):
                         with torch.inference_mode():
                             outputs = self._forward(entry.batch)
                         self.output_pipe.send(TaskEntry(entry.uids, outputs))
-                    # elif hasattr(entry, OffloadEntry):
-                    #     if entry.on_device:
-                    #         self.model.to("cuda")
-                    #     else:
-                    #         self.model.to("cpu")
+                    elif isinstance(entry, OffloadEntry):
+                        if entry.loaded:
+                            self.model.to("cuda")
+                        else:
+                            self.model.to("cpu")
+                        self.output_pipe.send(entry)
                 except RuntimeError:
                     time.sleep(0.01)

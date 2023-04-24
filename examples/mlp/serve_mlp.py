@@ -2,12 +2,10 @@ import asyncio
 from functools import partial
 import time
 
+from computron import launch_multi_model, ModelConfig
 import torch
 
-# Should install as package instead
-from launch import launch_multi_model, ModelConfig
-from models import mlp
-
+import mlp
 
 ctlr = None
 
@@ -17,7 +15,9 @@ async def make_requests(num_reqs):
     for i in range(num_reqs):
         data = torch.ones((256,)) * i
         req = mlp.MLPRequest(data=data)
-        resp = await ctlr.handle_request(f"mlp{i % 2}", req)
+        target = i % 2
+        # target = i // (num_reqs // 2)
+        resp = await ctlr.handle_request(f"mlp{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
         # print(resp)
     print(f"Total time: {time.time() - start_time}")
@@ -25,8 +25,8 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 2
-    pp_world_size = 1
+    tp_world_size = 1
+    pp_world_size = 2
     # num_chunks = 1
     first_port = 29600
 
@@ -43,6 +43,7 @@ if __name__ == "__main__":
             pack_response_fn=mlp.pack_response,
             model_fn=partial(mlp.MLP, dim=256),
             model_exec_seq=mlp.exec_seq,
+            batch_manager=mlp.MLPBatchManager(max_batch_size=1),
         )
         configs.append(config)
 
@@ -52,7 +53,10 @@ if __name__ == "__main__":
         pp_world_size=pp_world_size,
         n_nodes=1,
         node_rank=0,
+        controller_kwargs={
+            "max_loaded": 1,
+        },
     )
 
     time.sleep(15) # Wait for engine to start
-    asyncio.run(make_requests(20))
+    asyncio.run(make_requests(10))

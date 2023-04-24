@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "computron"
+version = "0.0.1"
+authors = [
+    {name="Daniel Zou", email="dlzou@berkeley.edu"},
+]
+description = "Serving multiple deep learning models on shared hardware"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/dlzou/cs267-project"
+"Bug Tracker" = "https://github.com/dlzou/cs267-project/issues"
+
+[tool.setuptools]
+packages = ["computron"]
