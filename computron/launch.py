@@ -71,7 +71,7 @@ def launch_multi_model(
     n_nodes: int,
     node_rank: int,
     controller_kwargs: Dict[str, Any],
-) -> Optional[OffloadingEngine]:
+) -> Optional[Controller]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0

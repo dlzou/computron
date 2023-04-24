@@ -27,7 +27,7 @@ if __name__ == "__main__":
     num_models = 2
     tp_world_size = 1
     pp_world_size = 2
-    # num_chunks = 1
+    # num_chunks = 1 # This is for interleaved PP
     first_port = 29600
 
     configs = []
