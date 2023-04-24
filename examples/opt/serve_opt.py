@@ -1,7 +1,7 @@
 import asyncio
 from functools import partial
 import time
-
+from pydantic import Field
 from computron import launch_multi_model, ModelConfig
 import torch
 from transformers import GPT2Tokenizer
@@ -12,7 +12,8 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        data = TODO
+        data = Field(
+        min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
         req = opt.OptRequest(data=data)
         target = i % 2
         # target = i // (num_reqs // 2)
@@ -34,7 +35,7 @@ if __name__ == "__main__":
     pp_world_size = 2
     # num_chunks = 1
     first_port = 29600
-    tokenizer = GPT2Tokenizer.from_pretrained('facebook/opt-125m')
+    # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     configs = []
     for i in range(num_models):
         config = ModelConfig(
@@ -45,10 +46,10 @@ if __name__ == "__main__":
             request_port=(first_port + 3*i + 2),
             request_type=opt.OptRequest,
             pack_response_fn=opt.pack_response,
-            unpack_request_fn=opt.tokenizer_func(tokenizer=tokenizer),
-            model_fn=partial(opt.get_model_fn(model_name)),
+            unpack_request_fn=opt.unpack_request,
+            model_fn=opt.opt_125M,
             # model_exec_seq=None,
-            batch_manager=opt.BatchManagerForGeneration(max_batch_size=1, pad_token_id=tokenizer.pad_token_id),
+            batch_manager=opt.BatchManagerForGeneration(max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id),
         )
         configs.append(config)
 

@@ -8,31 +8,35 @@ from typing import List, Deque, Tuple, Hashable, Any
 from energonai import BatchManager, SubmitEntry, TaskEntry
 from transformers import OPTForCausalLM
 
+from transformers import GPT2Tokenizer
+tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 
-def get_model_fn(model_name: str):
+def get_model_fn():
     model_map = {
-        'opt-125m': opt_125M,
+        'opt-125m': opt_125M, #(checkpoint='/data/yusun/xueyang/checkpoints/cs267/reshard-model_part-0.pt'),
         'opt-6.7b': opt_6B,
         'opt-30b': opt_30B,
         'opt-175b': opt_175B
     }
-    return model_map[model_name]
+    return model_map['opt-125m']
 
 class OptRequest(BaseModel):
     data: Any
 
-def unpack_request(req: OptRequest) -> SubmitEntry:   
-    return SubmitEntry(id(req), req.data)
+def unpack_request(req: OptRequest) -> SubmitEntry: 
+    # tokenizer = GPT2Tokenizer.from_pretrained('gpt2') 
+    return SubmitEntry(id(req), tokenizer(req.data))
 
-def tokenizer_func(req: OptRequest, tokenizer):
-    req.data = tokenizer(req.data, truncation=True, max_length=512)
-    return unpack_request(req)
+# def tokenizer_func(req: OptRequest, tokenizer):
+#     req.data = tokenizer(req.data, truncation=True, max_length=512)
+#     return unpack_request(req)
     
 
 class OptResponse(BaseModel):
     output: Any
 
 def pack_response(output: Any) -> OptResponse:
+
     return OptResponse(output=output)
 
 
