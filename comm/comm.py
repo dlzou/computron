@@ -7,10 +7,10 @@ import pickle
 import sys
 print(os.path.abspath(os.path.curdir))
 sys.path.append(os.path.abspath("."))
-sys.path.append(os.path.abspath("../cs267-project"))
+sys.path.append(os.path.abspath("../cs267-project/alpa"))
 print(sys.path)
 
-import alpa_serve.simulator.workload as workload
+import alpa.alpa_serve.simulator.workload as workload
 
 import socket
 
