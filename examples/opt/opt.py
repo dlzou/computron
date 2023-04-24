@@ -1,15 +1,14 @@
 from energonai.model import opt_125M, opt_30B, opt_175B, opt_6B
-from typing import Any
 from energonai import SubmitEntry
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import torch
 import torch.nn as nn
-from typing import List, Deque, Tuple, Hashable, Any
+from typing import List, Deque, Tuple, Hashable, Any, Union, Optional
 from energonai import BatchManager, SubmitEntry, TaskEntry
 from transformers import OPTForCausalLM
-
+from computron import OffloadEntry
 from transformers import GPT2Tokenizer
-tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+tokenizer = GPT2Tokenizer.from_pretrained('facebook/opt-125m')
 
 def get_model_fn():
     model_map = {
@@ -22,10 +21,21 @@ def get_model_fn():
 
 class OptRequest(BaseModel):
     data: Any
+    max_tokens: int = Field(gt=0, le=256, default=64)
+    prompt: str = Field(
+        min_length=1, default='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
+    top_k: Optional[int] = Field(default=50, gt=0, example=50)
+    top_p: Optional[float] = Field(default=0.5, gt=0.0, lt=1.0, example=0.5)
+    temperature: Optional[float] = Field(default=0.7, gt=0.0, lt=1.0, example=0.7)
 
 def unpack_request(req: OptRequest) -> SubmitEntry: 
+    inputs = tokenizer(req.prompt, truncation=True, max_length=512)
+    inputs['max_tokens'] = req.max_tokens
+    inputs['top_k'] = req.top_k
+    inputs['top_p'] = req.top_p
+    inputs['temperature'] = req.temperature
     # tokenizer = GPT2Tokenizer.from_pretrained('gpt2') 
-    return SubmitEntry(id(req), tokenizer(req.data))
+    return SubmitEntry(id(req), inputs)
 
 # def tokenizer_func(req: OptRequest, tokenizer):
 #     req.data = tokenizer(req.data, truncation=True, max_length=512)
@@ -36,7 +46,7 @@ class OptResponse(BaseModel):
     output: Any
 
 def pack_response(output: Any) -> OptResponse:
-
+    output = tokenizer.decode(output[0], skip_special_tokens=True)
     return OptResponse(output=output)
 
 
@@ -65,12 +75,16 @@ class BatchManagerForGeneration(BatchManager):
         data = entry.data
         return (data['top_k'], data['top_p'], data['temperature'])
 
-    def make_batch(self, q: Deque[SubmitEntry]) -> Tuple[TaskEntry, dict]:
+    def make_batch(self, q: Deque[Union[SubmitEntry, OffloadEntry]]) -> Tuple[Union[TaskEntry, OffloadEntry], dict]:
         entry = q.popleft()
+        if isinstance(entry, OffloadEntry):
+            return entry, {}
         uids = [entry.uid]
         batch = [entry.data]
         while len(batch) < self.max_batch_size:
             if len(q) == 0:
+                break
+            if isinstance(q[0], OffloadEntry):
                 break
             if self._make_batch_key(entry) != self._make_batch_key(q[0]):
                 break
