@@ -16,7 +16,9 @@ async def make_requests(num_reqs):
     for i in range(num_reqs):
         data = torch.ones((256,)) * i
         req = mlp.MLPRequest(data=data)
-        resp = await ctlr.handle_request(f"mlp{i % 2}", req)
+        target = i % 2
+        # target = i // (num_reqs // 2)
+        resp = await ctlr.handle_request(f"mlp{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
         # print(resp)
     print(f"Total time: {time.time() - start_time}")
@@ -52,6 +54,9 @@ if __name__ == "__main__":
         pp_world_size=pp_world_size,
         n_nodes=1,
         node_rank=0,
+        controller_kwargs={
+            "max_loaded": 1,
+        }
     )
 
     time.sleep(15) # Wait for engine to start

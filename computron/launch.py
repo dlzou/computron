@@ -70,6 +70,7 @@ def launch_multi_model(
     pp_world_size: int,
     n_nodes: int,
     node_rank: int,
+    controller_kwargs: Dict[str, Any],
 ) -> Optional[OffloadingEngine]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
@@ -105,7 +106,7 @@ def launch_multi_model(
             p.start()
 
     if node_rank == 0:
-        ctlr = Controller()
+        ctlr = Controller(**controller_kwargs)
         for i in range(num_models):
             config = model_configs[i]
             ctlr.register_model(config.model_id, config.master_host, config.request_port)
