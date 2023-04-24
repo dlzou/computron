@@ -12,8 +12,9 @@ from energonai.utils import build_device_maps, Terminator
 from pydantic import BaseModel
 import torch.distributed.rpc as trpc
 
-from offload import OffloadEntry, OffloadRequest, OffloadResponse
-from utils import send_obj, recv_obj
+from computron.batch_mgr import OffloadingBatchManager
+from computron.offload import OffloadEntry, OffloadRequest, OffloadResponse
+from computron.utils import send_obj, recv_obj
 
 
 class QueueFullError(Exception):
@@ -45,7 +46,7 @@ class OffloadingEngine:
     ):
         self.logger = get_dist_logger('energonai')
         if batch_manager is None:
-            self.batch_manager = BatchManager()
+            self.batch_manager = OffloadingBatchManager()
         else:
             assert isinstance(batch_manager, BatchManager)
             self.batch_manager = batch_manager

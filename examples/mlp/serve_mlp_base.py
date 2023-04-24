@@ -5,7 +5,6 @@ import time
 from energonai import launch_engine
 import torch
 
-# Should install as package instead
 import mlp 
 
 
@@ -38,4 +37,4 @@ if __name__ == "__main__":
     )
 
     time.sleep(15) # Wait for engine to start
-    asyncio.run(make_requests(20))
+    asyncio.run(make_requests(10))

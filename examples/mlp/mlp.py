@@ -3,13 +3,11 @@ from typing import Any, Deque, Hashable, List, Tuple, Union
 
 import colossalai.nn as col_nn
 from colossalai.utils import print_rank_0
-from energonai import TaskEntry
-from energonai.batch_mgr import BatchManager, SubmitEntry
+from computron import OffloadEntry, OffloadingBatchManager
+from energonai import SubmitEntry, TaskEntry
 from pydantic import BaseModel
 import torch
 import torch.nn as nn
-
-from offload import OffloadEntry
 
 
 class MLP(nn.Module):
@@ -53,7 +51,7 @@ def pack_response(output: Any) -> MLPResponse:
 
 
 # TODO: write own parent OffloadingBatchManager
-class MLPBatchManager(BatchManager):
+class MLPBatchManager(OffloadingBatchManager):
     def __init__(self, max_batch_size: int = 1):
         self.max_batch_size = max_batch_size
 

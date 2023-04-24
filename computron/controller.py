@@ -3,8 +3,8 @@ from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
 
-from offload import OffloadRequest, OffloadResponse
-from utils import send_obj, recv_obj
+from computron.offload import OffloadRequest, OffloadResponse
+from computron.utils import send_obj, recv_obj
 
 
 class Controller:

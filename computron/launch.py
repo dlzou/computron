@@ -5,9 +5,9 @@ from energonai import BatchManager, SubmitEntry
 from pydantic import BaseModel
 import torch.multiprocessing as mp
 
-from controller import Controller
-from engine import OffloadingEngine
-from worker import OffloadingWorker
+from computron.controller import Controller
+from computron.engine import OffloadingEngine
+from computron.worker import OffloadingWorker
 
 
 @dataclass

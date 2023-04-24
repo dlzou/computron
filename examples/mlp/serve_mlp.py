@@ -2,10 +2,9 @@ import asyncio
 from functools import partial
 import time
 
+from computron import launch_multi_model, ModelConfig
 import torch
 
-# Should install as package instead
-from launch import launch_multi_model, ModelConfig
 import mlp
 
 ctlr = None
@@ -26,8 +25,8 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 2
-    pp_world_size = 1
+    tp_world_size = 1
+    pp_world_size = 2
     # num_chunks = 1
     first_port = 29600
 
@@ -56,7 +55,7 @@ if __name__ == "__main__":
         node_rank=0,
         controller_kwargs={
             "max_loaded": 1,
-        }
+        },
     )
 
     time.sleep(15) # Wait for engine to start

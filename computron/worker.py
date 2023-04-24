@@ -14,7 +14,7 @@ import torch
 import torch.distributed.rpc as trpc
 import torch.nn as nn
 
-from offload import OffloadEntry
+from computron.offload import OffloadEntry
 
 
 class OffloadingWorker(Worker):
