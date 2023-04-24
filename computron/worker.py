@@ -87,7 +87,6 @@ class OffloadingWorker(Worker):
 
         self.logger = get_dist_logger('energonai')
         self.logger.info(f'{self.rpc_name} start')
-        self.logger.info(f"{self.rpc_name} model on CUDA: {next(self.model.parameters()).is_cuda}")
         self._start()
 
     def _start(self):

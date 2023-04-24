@@ -13,7 +13,6 @@ class Echo(nn.Module):
     def __init__(self):
         super().__init__()
         print_rank_0("Intializing echo model")
-        self.param = torch.zeros((1,))
 
     def forward(self, x):
         print_rank_0("Executing echo model")
