@@ -29,24 +29,23 @@ class Controller:
             out_reader, out_writer = await asyncio.open_connection(*self.engines[out_model_id])
             load_req = OffloadRequest(loaded=False)
             await send_obj(out_writer, load_req)
-        in_reader, in_writer = await asyncio.open_connection(*self.engines[in_model_id])
-        load_req = OffloadRequest(loaded=True)
-        await send_obj(in_writer, load_req)
-
-        if swap_out:
             load_resp: OffloadResponse = await recv_obj(out_reader)
             assert load_resp.success
             self.loaded[out_model_id] = False
             out_writer.close()
+
+        in_reader, in_writer = await asyncio.open_connection(*self.engines[in_model_id])
+        load_req = OffloadRequest(loaded=True)
+        await send_obj(in_writer, load_req)
         load_resp: OffloadResponse = await recv_obj(in_reader)
         assert load_resp.success
-        self.loaded[in_model_id] = True
         in_writer.close()
 
+        self.loaded[in_model_id] = True
+        self.evict_queue.append(in_model_id)
         if swap_out:
             await out_writer.wait_closed()
         await in_writer.wait_closed()
-        self.evict_queue.append(in_model_id)
 
     async def handle_request(self, model_id: str, req: BaseModel):
         async with self.request_lock:

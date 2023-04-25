@@ -127,7 +127,6 @@ class OffloadingEngine:
         if isinstance(req, self.request_type):
             entry: SubmitEntry = self.unpack_request_fn(req)
         elif isinstance(req, OffloadRequest):
-            # entry: SubmitEntry = SubmitEntry(id(req), {"_loaded": req.loaded})
             entry: OffloadEntry = OffloadEntry(id(req), req.loaded)
         assert entry.uid not in self.completion_map
         if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
@@ -163,8 +162,13 @@ class OffloadingEngine:
                 if isinstance(entry, TaskEntry):
                     self.batch_info[entry.uids] = batch_info
                     self.timer_info[entry.uids] = (len(entry.uids), time.time())
-                # elif isinstance(entry, OffloadEntry):
-                #     self.timer_info[entry.uid] = (len(entry.uid), time.time())
+                elif isinstance(entry, OffloadEntry):
+                    # Bypass the completion loop
+                    self.completion_map[entry.uid] = entry.loaded
+                    self.completion_event[entry.uid].set()
+                    self.logger.info(
+                        f"{self.model_id} loaded state: {entry.loaded}"
+                    )
                 for pipe in self.submit_pipes:
                     pipe.send(entry)
             else:
@@ -195,13 +199,6 @@ class OffloadingEngine:
                     batch_size, start_time = self.timer_info.pop(entry_0.uids)
                     self.logger.info(
                         f"{self.model_id} batch size: {batch_size}, time: {time.time() -start_time:.3f}"
-                    )
-                elif isinstance(entry_0, OffloadEntry):
-                    self.completion_map[entry_0.uid] = entry_0.loaded
-                    self.completion_event[entry_0.uid].set()
-                    # batch_size, start_time = self.timer_info.pop(entry_0.uid)
-                    self.logger.info(
-                        f"{self.model_id} loaded state: {entry_0.loaded}"
                     )
             else:
                 await asyncio.sleep(0.01)

@@ -1,49 +1,54 @@
 import asyncio
 from functools import partial
 import time
-
+from pydantic import Field
 from computron import launch_multi_model, ModelConfig
 import torch
-
-import mlp
+from transformers import GPT2Tokenizer
+import opt
 
 ctlr = None
-
 
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        data = torch.ones((256,)) * i
-        req = mlp.MLPRequest(data=data)
+        data = Field(
+        min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
+        req = opt.OptRequest(data=data)
         target = i % 2
         # target = i // (num_reqs // 2)
-        resp: mlp.MLPResponse = await ctlr.handle_request(f"mlp{target}", req)
+        resp: opt.OptResponse = await ctlr.handle_request(f"opt{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
-        print(resp.output.shape)
+        print(resp.output)
     print(f"Total time: {time.time() - start_time}")
 
 
 if __name__ == "__main__":
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('model', choices=['opt-125m', 'opt-6.7b', 'opt-30b', 'opt-175b'])  
+    # parser.add_argument('--checkpoint', default=None)
+    # args = parser.parse_args()
+
+    model_name = 'opt_125M'
     num_models = 2
     tp_world_size = 1
     pp_world_size = 2
-    # num_chunks = 1 # This is for interleaved PP
+    # num_chunks = 1
     first_port = 29600
 
     configs = []
     for i in range(num_models):
         config = ModelConfig(
-            model_id=f"mlp{i}",
+            model_id=f"opt{i}",
             master_host="localhost",
             master_port=(first_port + 3*i),
             rpc_port=(first_port + 3*i + 1),
             request_port=(first_port + 3*i + 2),
-            request_type=mlp.MLPRequest,
-            unpack_request_fn=mlp.unpack_request,
-            pack_response_fn=mlp.pack_response,
-            model_fn=partial(mlp.MLP, dim=256),
-            pipelinable=True,
-            batch_manager=mlp.MLPBatchManager(max_batch_size=1),
+            request_type=opt.OptRequest,
+            unpack_request_fn=opt.unpack_request,
+            pack_response_fn=opt.pack_response,
+            model_fn=opt.opt_125M,
+            batch_manager=opt.BatchManagerForGeneration(max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id),
         )
         configs.append(config)
 

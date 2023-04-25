@@ -15,35 +15,29 @@ class MLP(nn.Module):
         super().__init__()
         intermediate_dim = dim * 4
         self.dense_1 = col_nn.Linear(dim, intermediate_dim)
-        print_rank_0(f'Weight of the first linear layer: {self.dense_1.weight.transpose(0, 1).shape}')
         self.activation = torch.nn.GELU()
         self.dense_2 = col_nn.Linear(intermediate_dim, dim)
-        print_rank_0(f'Weight of the second linear layer: {self.dense_2.weight.transpose(0, 1).shape}')
         self.dropout = col_nn.Dropout(0.1)
+        print_rank_0("Initialized MLP")
 
     def forward(self, x):
         x = self.dense_1(x)
-        print_rank_0(f'Output of the first linear layer: {x.shape}')
         x = self.activation(x)
         x = self.dense_2(x)
-        print_rank_0(f'Output of the second linear layer: {x.shape}')
         x = self.dropout(x)
         return x
-
-
-exec_seq = ["dense_1", "activation", "dense_2", "dropout"]
 
 
 class MLPRequest(BaseModel):
     data: Any
 
 
-def unpack_request(req: MLPRequest) -> SubmitEntry:
-    return SubmitEntry(id(req), req.data)
-
-
 class MLPResponse(BaseModel):
     output: Any
+
+
+def unpack_request(req: MLPRequest) -> SubmitEntry:
+    return SubmitEntry(id(req), req.data)
 
 
 def pack_response(output: Any) -> MLPResponse:

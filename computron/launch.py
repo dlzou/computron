@@ -21,10 +21,7 @@ class ModelConfig:
     unpack_request_fn: Callable[[BaseModel], SubmitEntry]
     pack_response_fn: Callable[[Any], BaseModel]
     model_fn: Callable
-    # Can only partition for PP once colossalai is launched and gpc is set.
-    # Lazy solution here is to pass the execution sequence to workers and let them partition.
-    # If model_exec_seq = None, use model_fn as given.
-    model_exec_seq: Optional[List[Any]] = None
+    pipelinable: bool = False
     batch_manager: Optional[BatchManager] = None
     pipe_size: int = 1
     queue_size: int = 0
@@ -54,7 +51,7 @@ def launch_offloading_workers(
                 config.rpc_port,
                 n_proc_per_node,
                 config.model_fn,
-                config.model_exec_seq,
+                config.pipelinable,
                 config.pipe_size,
                 config.rpc_disable_shm,
             ),
@@ -71,7 +68,7 @@ def launch_multi_model(
     n_nodes: int,
     node_rank: int,
     controller_kwargs: Dict[str, Any],
-) -> Optional[OffloadingEngine]:
+) -> Optional[Controller]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
