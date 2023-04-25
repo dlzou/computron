@@ -12,9 +12,7 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        data = Field(
-        min_length=1, example='Question: Where were the 2004 Olympics held?\nAnswer: Athens, Greece\n\nQuestion: What is the longest river on the earth?\nAnswer:')
-        req = opt.OptRequest(data=data)
+        req = opt.OptRequest(prompt="hello world")
         target = i % 2
         # target = i // (num_reqs // 2)
         resp: opt.OptResponse = await ctlr.handle_request(f"opt{target}", req)
@@ -32,7 +30,7 @@ if __name__ == "__main__":
     model_name = 'opt_125M'
     num_models = 2
     tp_world_size = 1
-    pp_world_size = 2
+    pp_world_size = 1
     # num_chunks = 1
     first_port = 29600
 

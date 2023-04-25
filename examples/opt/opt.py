@@ -45,7 +45,7 @@ def unpack_request(req: OptRequest) -> SubmitEntry:
 
 
 def pack_response(output: Any) -> OptResponse:
-    output = tokenizer.decode(output[0], skip_special_tokens=True)
+    output = tokenizer.decode(output, skip_special_tokens=True)
     return OptResponse(output=output)
 
 
