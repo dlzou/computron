@@ -25,9 +25,15 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
+<<<<<<< HEAD
     tp_world_size = 2
     pp_world_size = 1
     # num_chunks = 1
+=======
+    tp_world_size = 1
+    pp_world_size = 2
+    # num_chunks = 1 # This is for interleaved PP
+>>>>>>> master
     first_port = 29600
 
     configs = []
