@@ -1,12 +1,20 @@
-# CS 267 Final Project
+# Computron
 
-Serving multiple parallelized deep learning models on the same cluster with dynamic offloading.
+Serving multiple parallelized deep learning models on the same cluster, with dynamic offloading.
+
+Final project for [CS 267: Parallel Computing](https://sites.google.com/lbl.gov/cs267-spr2023).
 
 ## Install
 
-### From Source
+### For Development
 
-First, create an environment install the fork of Energon-AI from the included submodule. Then, install Computron from source:
+Clone this repo:
+
+```shell
+git clone --recurse-submodules git@github.com:dlzou/cs267-project.git
+```
+
+Create an environment and install Energon-AI and AlpaServe from the included submodules. Then, install Computron from source:
 
 ```shell
 pip install -e .
