@@ -28,7 +28,7 @@ class OffloadingWorker(Worker):
         rpc_port: int,
         n_proc_per_node: int,
         model_fn: Callable[[Any], nn.Module],
-        model_exec_seq: List[Any],
+        pipelinable: bool = False,
         pipe_size: int = 1,
         rpc_disable_shm: bool = True,
         **model_kwargs: Any
@@ -43,11 +43,12 @@ class OffloadingWorker(Worker):
         self.tp_rank = gpc.get_local_rank(ParallelMode.PARALLEL_1D)
         self.pp_rank = gpc.get_local_rank(ParallelMode.PIPELINE) if gpc.is_initialized(ParallelMode.PIPELINE) else 0
 
-        if model_exec_seq is not None:
+        if pipelinable:
             pctx = PipelinableContext()
             with pctx:
-                model_fn(**model_kwargs)
-            pctx.to_layer_list(model_exec_seq)
+                self.model = model_fn(**model_kwargs)
+            # pctx.to_layer_list()
+            pctx.policy = "uniform"
             self.model: nn.Module = pctx.partition(
                 num_chunks=1,
                 pipeline_size=pp_world_size,

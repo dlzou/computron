@@ -19,7 +19,7 @@ async def make_requests(num_reqs):
         engine.submit(uid, data)
         output = await engine.wait(uid)
         print(f"Response time {i}: {time.time() - start_time}")
-        # print(output)
+        print(output.shape)
     print(f"Total time: {time.time() - start_time}")
 
 

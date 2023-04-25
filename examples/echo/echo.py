@@ -12,7 +12,7 @@ import torch.nn as nn
 class Echo(nn.Module):
     def __init__(self):
         super().__init__()
-        print_rank_0("Intializing echo model")
+        print_rank_0("Initialized Echo")
 
     def forward(self, x):
         print_rank_0("Executing echo model")
@@ -24,12 +24,12 @@ class EchoRequest(BaseModel):
     data: Any
 
 
-def unpack_request(req: EchoRequest) -> SubmitEntry:
-    return SubmitEntry(id(req), req.data)
-
-
 class EchoResponse(BaseModel):
     output: Any
+
+
+def unpack_request(req: EchoRequest) -> SubmitEntry:
+    return SubmitEntry(id(req), req.data)
 
 
 def pack_response(output: Any) -> EchoResponse:

@@ -17,9 +17,9 @@ async def make_requests(num_reqs):
         req = opt.OptRequest(data=data)
         target = i % 2
         # target = i // (num_reqs // 2)
-        resp = await ctlr.handle_request(f"opt{target}", req)
+        resp: opt.OptResponse = await ctlr.handle_request(f"opt{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
-        # print(resp)
+        print(resp.output)
     print(f"Total time: {time.time() - start_time}")
 
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     pp_world_size = 2
     # num_chunks = 1
     first_port = 29600
-    # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+
     configs = []
     for i in range(num_models):
         config = ModelConfig(
@@ -45,10 +45,9 @@ if __name__ == "__main__":
             rpc_port=(first_port + 3*i + 1),
             request_port=(first_port + 3*i + 2),
             request_type=opt.OptRequest,
-            pack_response_fn=opt.pack_response,
             unpack_request_fn=opt.unpack_request,
+            pack_response_fn=opt.pack_response,
             model_fn=opt.opt_125M,
-            # model_exec_seq=None,
             batch_manager=opt.BatchManagerForGeneration(max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id),
         )
         configs.append(config)
@@ -64,5 +63,5 @@ if __name__ == "__main__":
         },
     )
 
-    time.sleep(15) # Wait for engine to start
+    time.sleep(20) # Wait for engine to start
     asyncio.run(make_requests(10))

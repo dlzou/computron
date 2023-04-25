@@ -17,16 +17,16 @@ async def make_requests(num_reqs):
         req = mlp.MLPRequest(data=data)
         target = i % 2
         # target = i // (num_reqs // 2)
-        resp = await ctlr.handle_request(f"mlp{target}", req)
+        resp: mlp.MLPResponse = await ctlr.handle_request(f"mlp{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
-        # print(resp)
+        print(resp.output.shape)
     print(f"Total time: {time.time() - start_time}")
 
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 1
-    pp_world_size = 2
+    tp_world_size = 2
+    pp_world_size = 1
     # num_chunks = 1
     first_port = 29600
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
             unpack_request_fn=mlp.unpack_request,
             pack_response_fn=mlp.pack_response,
             model_fn=partial(mlp.MLP, dim=256),
-            model_exec_seq=mlp.exec_seq,
+            pipelinable=True,
             batch_manager=mlp.MLPBatchManager(max_batch_size=1),
         )
         configs.append(config)
@@ -58,5 +58,5 @@ if __name__ == "__main__":
         },
     )
 
-    time.sleep(15) # Wait for engine to start
+    time.sleep(20) # Wait for engine to start
     asyncio.run(make_requests(10))
