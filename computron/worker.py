@@ -47,7 +47,7 @@ class OffloadingWorker(Worker):
             pctx = PipelinableContext()
             with pctx:
                 self.model = model_fn(**model_kwargs)
-            # pctx.to_layer_list()
+            pctx.to_layer_list()
             pctx.policy = "uniform"
             self.model: nn.Module = pctx.partition(
                 num_chunks=1,

@@ -16,7 +16,7 @@ async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
         inputs = tokenizer("hello world", truncation=True, max_length=512)
-        inputs["max_tokens"] = 5
+        inputs["max_tokens"] = 1
         inputs["top_k"] = 50
         inputs["top_p"] = 0.5
         inputs["temperature"] = 0.7

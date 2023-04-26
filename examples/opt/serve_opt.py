@@ -12,7 +12,7 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        req = opt.OptRequest(max_tokens=5, prompt="hello world")
+        req = opt.OptRequest(max_tokens=1, prompt="hello world")
         target = i % 2
         # target = i // (num_reqs // 2)
         resp: opt.OptResponse = await ctlr.handle_request(f"opt{target}", req)
@@ -31,7 +31,6 @@ if __name__ == "__main__":
     num_models = 2
     tp_world_size = 2
     pp_world_size = 1
-    # num_chunks = 1
     first_port = 29600
 
     configs = []

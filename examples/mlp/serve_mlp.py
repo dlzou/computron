@@ -10,10 +10,10 @@ import mlp
 ctlr = None
 
 
-async def make_requests(num_reqs):
+async def make_requests(num_reqs, dim):
     start_time = time.time()
     for i in range(num_reqs):
-        data = torch.ones((256,)) * i
+        data = torch.ones((dim,)) * i
         req = mlp.MLPRequest(data=data)
         target = i % 2
         # target = i // (num_reqs // 2)
@@ -25,10 +25,10 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 1
-    pp_world_size = 2
-    # num_chunks = 1 # This is for interleaved PP
+    tp_world_size = 2
+    pp_world_size = 1
     first_port = 29600
+    dim = 256
 
     configs = []
     for i in range(num_models):
@@ -41,7 +41,7 @@ if __name__ == "__main__":
             request_type=mlp.MLPRequest,
             unpack_request_fn=mlp.unpack_request,
             pack_response_fn=mlp.pack_response,
-            model_fn=partial(mlp.MLP, dim=256),
+            model_fn=partial(mlp.MLP, dim=dim),
             pipelinable=True,
             batch_manager=mlp.MLPBatchManager(max_batch_size=1),
         )
@@ -59,4 +59,4 @@ if __name__ == "__main__":
     )
 
     time.sleep(20) # Wait for engine to start
-    asyncio.run(make_requests(10))
+    asyncio.run(make_requests(10, dim))
