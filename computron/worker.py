@@ -1,4 +1,5 @@
 import time
+from contextlib import contextmanager
 from typing import Any, Callable, List
 
 import colossalai
@@ -8,7 +9,7 @@ from colossalai.logging import disable_existing_loggers, get_dist_logger
 from colossalai.pipeline.pipelinable import PipelinableContext
 from energonai.pipe import Pipe
 from energonai.task import TaskEntry
-from energonai.utils import build_device_maps
+from energonai.utils import build_device_maps, Terminator
 from energonai.worker import Worker
 import torch
 import torch.distributed.rpc as trpc
@@ -17,7 +18,7 @@ import torch.nn as nn
 from computron.offload import OffloadEntry
 
 
-class OffloadingWorker(Worker):
+class OffloadingWorker:
     def __init__(
         self,
         rank: int,
@@ -90,6 +91,13 @@ class OffloadingWorker(Worker):
         self.logger.info(f'{self.rpc_name} start')
         self._start()
 
+    @contextmanager
+    def _lifespan(self):
+        try:
+            yield
+        finally:
+            self._shutdown()
+
     def _start(self):
         with self._lifespan():
             while True:
@@ -107,3 +115,18 @@ class OffloadingWorker(Worker):
                         self.output_pipe.send(entry)
                 except RuntimeError:
                     time.sleep(0.01)
+
+    def _shutdown(self) -> None:
+        Terminator.shield()
+        trpc.rpc_sync('master', Terminator.terminate)
+        trpc.shutdown()
+
+    def _forward(self, inputs: Any) -> Any:
+        self.logger.info(f"{self.rpc_name} forward") #
+        if isinstance(inputs, (tuple, list)):
+            outputs = self.model(*inputs)
+        elif isinstance(inputs, dict):
+            outputs = self.model(**inputs)
+        else:
+            outputs = self.model(inputs)
+        return outputs
