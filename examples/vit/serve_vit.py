@@ -26,7 +26,7 @@ async def make_requests(num_reqs):
 if __name__ == "__main__":
     num_models = 2
     tp_world_size = 1
-    pp_world_size = 2
+    pp_world_size = 1
     first_port = 29234
     # dim = 256
 
