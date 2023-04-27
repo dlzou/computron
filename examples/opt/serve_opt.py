@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     model_name = 'opt_125M'
     num_models = 2
-    tp_world_size = 2
+    tp_world_size = 1
     pp_world_size = 1
     first_port = 29600
 
@@ -58,6 +58,7 @@ if __name__ == "__main__":
         controller_kwargs={
             "max_loaded": 1,
         },
+        log_file="stdout.log",
     )
 
     time.sleep(20) # Wait for engine to start
