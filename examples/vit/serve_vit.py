@@ -1,51 +1,50 @@
 import asyncio
 from functools import partial
 import time
-from pydantic import Field
+from proc_img import proc_img
 from computron import launch_multi_model, ModelConfig
 import torch
-from transformers import GPT2Tokenizer
-import opt
+
+import vit
 
 ctlr = None
+
 
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        req = opt.OptRequest(max_tokens=1, prompt="hello world")
+        img = proc_img('/data/yusun/xueyang/cs267/cs267-project/examples/vit/dataset/n01667114_9985.JPEG')
+        img = torch.unsqueeze(img, 0)
+        req = vit.vitRequest(data=img)
         target = i % 2
         # target = i // (num_reqs // 2)
-        resp: opt.OptResponse = await ctlr.handle_request(f"opt{target}", req)
+        resp: vit.vitResponse = await ctlr.handle_request(f"vit{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
-        print(resp.output)
+        print(resp.output.shape)
     print(f"Total time: {time.time() - start_time}")
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('model', choices=['opt-125m', 'opt-6.7b', 'opt-30b', 'opt-175b'])  
-    # parser.add_argument('--checkpoint', default=None)
-    # args = parser.parse_args()
-
-    model_name = 'opt_125M'
     num_models = 2
     tp_world_size = 2
     pp_world_size = 1
     first_port = 29600
+    dim = 256
 
     configs = []
     for i in range(num_models):
         config = ModelConfig(
-            model_id=f"opt{i}",
+            model_id=f"vit{i}",
             master_host="localhost",
             master_port=(first_port + 3*i),
             rpc_port=(first_port + 3*i + 1),
             request_port=(first_port + 3*i + 2),
-            request_type=opt.OptRequest,
-            unpack_request_fn=opt.unpack_request,
-            pack_response_fn=opt.pack_response,
-            model_fn=opt.get_model_fn('opt-125m'),
-            batch_manager=opt.BatchManagerForGeneration(max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id),
+            request_type=vit.vitRequest,
+            unpack_request_fn=vit.unpack_request,
+            pack_response_fn=vit.pack_response,
+            model_fn=vit.create_vit,
+            # pipelinable=True,
+            batch_manager=vit.vitBatchManager(max_batch_size=1),
         )
         configs.append(config)
 
