@@ -13,8 +13,7 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        img = proc_img('/data/yusun/xueyang/cs267/cs267-project/examples/vit/dataset/n01667114_9985.JPEG')
-        img = torch.unsqueeze(img, 0)
+        img = proc_img('/data/yusun/xueyang/cs267/cs267-project/examples/vit/dataset/n01667114_9985.JPEG')    
         req = vit.vitRequest(data=img)
         target = i % 2
         # target = i // (num_reqs // 2)
@@ -26,10 +25,10 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 2
-    pp_world_size = 1
-    first_port = 29600
-    dim = 256
+    tp_world_size = 1
+    pp_world_size = 2
+    first_port = 29234
+    # dim = 256
 
     configs = []
     for i in range(num_models):

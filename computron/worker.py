@@ -105,6 +105,7 @@ class OffloadingWorker:
                     entry = self.input_pipe.recv_nowait()
                     if isinstance(entry, TaskEntry):
                         with torch.inference_mode():
+                            # self.logger.info(f"{self.rpc_name} try to forward") #
                             outputs = self._forward(entry.batch)
                         self.output_pipe.send(TaskEntry(entry.uids, outputs))
                     elif isinstance(entry, OffloadEntry):
@@ -122,7 +123,7 @@ class OffloadingWorker:
         trpc.shutdown()
 
     def _forward(self, inputs: Any) -> Any:
-        self.logger.info(f"{self.rpc_name} forward") #
+        # self.logger.info(f"{self.rpc_name} forward") #
         if isinstance(inputs, (tuple, list)):
             outputs = self.model(*inputs)
         elif isinstance(inputs, dict):

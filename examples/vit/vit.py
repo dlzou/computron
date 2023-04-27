@@ -45,8 +45,19 @@ def create_vit():
     # launch from torch
     # parser = colossalai.get_default_parser()
     # args = parser.parse_args()
-    config = 'config.py'
-    colossalai.launch_from_torch(config=config)
+    # colossalai.launch_from_torch(config=args.config)
+
+    # model config
+    # img_size=224, patch_size=16, hidden_size=1024, depth=24, num_heads=16, mlp_ratio=4
+    IMG_SIZE = 224
+    PATCH_SIZE = 32
+    HIDDEN_SIZE = 1024
+    DEPTH = 24
+    NUM_HEADS = 16
+    MLP_RATIO = 4
+    NUM_CLASSES = 10
+    CHECKPOINT = False
+    SEQ_LENGTH = (IMG_SIZE // PATCH_SIZE)**2 + 1    # add 1 for cls token
 
     # get logger
     logger = get_dist_logger()
@@ -62,15 +73,15 @@ def create_vit():
     use_pipeline = is_using_pp()
 
     # create model
-    model_kwargs = dict(img_size=gpc.config.IMG_SIZE,
-                        patch_size=gpc.config.PATCH_SIZE,
-                        hidden_size=gpc.config.HIDDEN_SIZE,
-                        depth=gpc.config.DEPTH,
-                        num_heads=gpc.config.NUM_HEADS,
-                        vit_ratio=gpc.config.vit_RATIO,
+    model_kwargs = dict(img_size=IMG_SIZE,
+                        patch_size=PATCH_SIZE,
+                        hidden_size=HIDDEN_SIZE,
+                        depth=DEPTH,
+                        num_heads=NUM_HEADS,
+                        # vit_ratio=MLP_RATIO,
                         num_classes=10,
                         init_method='jax',
-                        checkpoint=gpc.config.CHECKPOINT)
+                        checkpoint=CHECKPOINT)
 
     if use_pipeline:
         pipelinable = PipelinableContext()

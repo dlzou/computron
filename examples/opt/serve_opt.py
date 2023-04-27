@@ -29,9 +29,9 @@ if __name__ == "__main__":
 
     model_name = 'opt_125M'
     num_models = 2
-    tp_world_size = 2
-    pp_world_size = 1
-    first_port = 29600
+    tp_world_size = 1
+    pp_world_size = 2
+    first_port = 29900
 
     configs = []
     for i in range(num_models):
