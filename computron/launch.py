@@ -122,7 +122,7 @@ def launch_multi_model(
                     config.pipe_size,
                     config.queue_size,
                     config.rpc_disable_shm,
-                )
+                ),
             )
             procs.append(p)
             p.start()

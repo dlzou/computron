@@ -21,3 +21,14 @@ classifiers = [
 
 [tool.setuptools]
 packages = ["computron"]
+
+[tool.black]
+line-length = 100
+target-version = ['py37']
+include = '\.pyi?$'
+extend-exclude = '''
+    ^/energonai
+    |^/alpa
+    |^/playground
+    |^/junkyard
+'''

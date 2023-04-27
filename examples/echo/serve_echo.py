@@ -29,9 +29,9 @@ if __name__ == "__main__":
         config = ModelConfig(
             model_id=f"echo{i}",
             master_host="localhost",
-            master_port=(first_port + 3*i),
-            rpc_port=(first_port + 3*i + 1),
-            request_port=(first_port + 3*i + 2),
+            master_port=(first_port + 3 * i),
+            rpc_port=(first_port + 3 * i + 1),
+            request_port=(first_port + 3 * i + 2),
             request_type=echo.EchoRequest,
             unpack_request_fn=echo.unpack_request,
             pack_response_fn=echo.pack_response,
