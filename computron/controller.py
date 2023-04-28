@@ -13,13 +13,13 @@ class Controller:
         self.loaded: Dict[str, bool] = {}
         self.request_lock = asyncio.Lock()
         self.evict_queue: List[str] = []
-        self.max_loaded = max_loaded 
+        self.max_loaded = max_loaded
 
     def register_model(self, model_id: str, host: str, port: int):
         assert model_id not in self.engines, f"'{model_id}' already registered"
         self.engines[model_id] = (host, port)
         self.loaded[model_id] = False
-        
+
     async def _swap_in(self, in_model_id: str):
         # TODO: better swapping algorithm for >2 models?
         assert not self.loaded[in_model_id], f"{in_model_id} already loaded"

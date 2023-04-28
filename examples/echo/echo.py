@@ -5,7 +5,6 @@ from typing import Any
 from colossalai.utils import print_rank_0
 from energonai import SubmitEntry
 from pydantic import BaseModel
-import torch
 import torch.nn as nn
 
 
