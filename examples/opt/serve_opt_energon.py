@@ -29,8 +29,8 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-    tp_world_size = 2
-    pp_world_size = 1
+    tp_world_size = 1
+    pp_world_size = 2
 
     engine = launch_engine(
         tp_world_size=tp_world_size,

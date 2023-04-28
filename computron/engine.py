@@ -47,7 +47,7 @@ class OffloadingEngine:
         if batch_manager is None:
             self.batch_manager = OffloadingBatchManager()
         else:
-            assert isinstance(batch_manager, BatchManager)
+            assert isinstance(batch_manager, OffloadingBatchManager)
             self.batch_manager = batch_manager
         self.world_size = tp_world_size * pp_world_size
         self.model_id = model_id

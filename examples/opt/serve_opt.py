@@ -1,7 +1,6 @@
 import asyncio
 import time
 
-from pydantic import Field
 from computron import launch_multi_model, ModelConfig
 import opt
 
@@ -11,10 +10,10 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        req = opt.OptRequest(max_tokens=1, prompt="hello world")
+        req = opt.OPTRequest(max_tokens=1, prompt="hello world")
         target = i % 2
         # target = i // (num_reqs // 2)
-        resp: opt.OptResponse = await ctlr.handle_request(f"opt{target}", req)
+        resp: opt.OPTResponse = await ctlr.handle_request(f"opt{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
         print(resp.output)
     print(f"Total time: {time.time() - start_time}")
@@ -40,11 +39,11 @@ if __name__ == "__main__":
             master_port=(first_port + 3 * i),
             rpc_port=(first_port + 3 * i + 1),
             request_port=(first_port + 3 * i + 2),
-            request_type=opt.OptRequest,
+            request_type=opt.OPTRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
             model_fn=opt.opt_125M,
-            batch_manager=opt.BatchManagerForGeneration(
+            batch_manager=opt.OPTBatchManager(
                 max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id
             ),
         )
