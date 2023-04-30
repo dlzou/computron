@@ -1,5 +1,6 @@
 from typing import List, Deque, Tuple, Hashable, Any, Union, Optional
 
+from colossalai.logging import get_dist_logger
 from computron import OffloadEntry, OffloadingBatchManager
 from energonai import BatchManager, SubmitEntry, TaskEntry
 from energonai.model import opt_125M, opt_30B, opt_175B, opt_6B
@@ -8,6 +9,7 @@ import torch
 from transformers import GPT2Tokenizer
 
 
+logger = get_dist_logger("colossalai")
 tokenizer = GPT2Tokenizer.from_pretrained("facebook/opt-30b")
 
 
@@ -38,7 +40,9 @@ class OPTResponse(BaseModel):
 
 def unpack_request(req: OPTRequest) -> SubmitEntry:
     inputs = tokenizer(req.prompt, truncation=True, max_length=512)
-    inputs["max_tokens"] = req.max_tokens
+    # For now, only support single token generation due to complications with PP.
+    # TODO: proper iteration-level scheduling
+    inputs["max_tokens"] = 1  # req.max_tokens
     inputs["top_k"] = req.top_k
     inputs["top_p"] = req.top_p
     inputs["temperature"] = req.temperature
@@ -108,8 +112,9 @@ class OPTBatchManager(OffloadingBatchManager):
     def split_batch(
         self, task_entry: TaskEntry, trunc_lens: List[int] = []
     ) -> List[Tuple[Hashable, Any]]:
+        outputs = task_entry.batch["input_ids"]
         retval = []
-        for uid, output, trunc_len in zip(task_entry.uids, task_entry.batch, trunc_lens):
+        for uid, output, trunc_len in zip(task_entry.uids, outputs, trunc_lens):
             retval.append((uid, output[:trunc_len]))
         return retval
 
@@ -121,15 +126,15 @@ class BatchManagerForGeneration(BatchManager):
         self.pad_token_id = pad_token_id
 
     def _left_padding(self, batch_inputs):
-        max_len = max(len(inputs['input_ids']) for inputs in batch_inputs)
-        outputs = {'input_ids': [], 'attention_mask': []}
+        max_len = max(len(inputs["input_ids"]) for inputs in batch_inputs)
+        outputs = {"input_ids": [], "attention_mask": []}
         for inputs in batch_inputs:
-            input_ids, attention_mask = inputs['input_ids'], inputs['attention_mask']
+            input_ids, attention_mask = inputs["input_ids"], inputs["attention_mask"]
             padding_len = max_len - len(input_ids)
             input_ids = [self.pad_token_id] * padding_len + input_ids
             attention_mask = [0] * padding_len + attention_mask
-            outputs['input_ids'].append(input_ids)
-            outputs['attention_mask'].append(attention_mask)
+            outputs["input_ids"].append(input_ids)
+            outputs["attention_mask"].append(attention_mask)
         for k in outputs:
             outputs[k] = torch.tensor(outputs[k])
         return outputs, max_len
@@ -137,7 +142,7 @@ class BatchManagerForGeneration(BatchManager):
     @staticmethod
     def _make_batch_key(entry: SubmitEntry) -> tuple:
         data = entry.data
-        return (data['top_k'], data['top_p'], data['temperature'])
+        return (data["top_k"], data["top_p"], data["temperature"])
 
     def make_batch(self, q: Deque[SubmitEntry]) -> Tuple[TaskEntry, dict]:
         entry = q.popleft()
@@ -148,7 +153,7 @@ class BatchManagerForGeneration(BatchManager):
                 break
             if self._make_batch_key(entry) != self._make_batch_key(q[0]):
                 break
-            if q[0].data['max_tokens'] > entry.data['max_tokens']:
+            if q[0].data["max_tokens"] > entry.data["max_tokens"]:
                 break
             e = q.popleft()
             batch.append(e.data)
@@ -156,15 +161,18 @@ class BatchManagerForGeneration(BatchManager):
         inputs, max_len = self._left_padding(batch)
         trunc_lens = []
         for data in batch:
-            trunc_lens.append(max_len + data['max_tokens'])
-        inputs['top_k'] = entry.data['top_k']
-        inputs['top_p'] = entry.data['top_p']
-        inputs['temperature'] = entry.data['temperature']
-        inputs['max_tokens'] = max_len + entry.data['max_tokens']
-        return TaskEntry(tuple(uids), inputs), {'trunc_lens': trunc_lens}
+            trunc_lens.append(max_len + data["max_tokens"])
+        inputs["top_k"] = entry.data["top_k"]
+        inputs["top_p"] = entry.data["top_p"]
+        inputs["temperature"] = entry.data["temperature"]
+        inputs["max_tokens"] = max_len + entry.data["max_tokens"]
+        return TaskEntry(tuple(uids), inputs), {"trunc_lens": trunc_lens}
 
-    def split_batch(self, task_entry: TaskEntry, trunc_lens: List[int] = []) -> List[Tuple[Hashable, Any]]:
+    def split_batch(
+        self, task_entry: TaskEntry, trunc_lens: List[int] = []
+    ) -> List[Tuple[Hashable, Any]]:
+        outputs = task_entry.batch["input_ids"]
         retval = []
-        for uid, output, trunc_len in zip(task_entry.uids, task_entry.batch, trunc_lens):
+        for uid, output, trunc_len in zip(task_entry.uids, outputs, trunc_lens):
             retval.append((uid, output[:trunc_len]))
         return retval

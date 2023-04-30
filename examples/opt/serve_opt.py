@@ -44,7 +44,7 @@ if __name__ == "__main__":
             pack_response_fn=opt.pack_response,
             model_fn=opt.opt_125M,
             batch_manager=opt.OPTBatchManager(
-                max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id
+                max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
         )
         configs.append(config)

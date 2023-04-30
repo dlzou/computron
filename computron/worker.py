@@ -37,7 +37,7 @@ class OffloadingWorker:
         self.world_size = tp_world_size * pp_world_size
         self.tp_world_size = tp_world_size
         self.pp_world_size = pp_world_size
-        disable_existing_loggers(exclude=["energonai", "colossalai"])
+        disable_existing_loggers(exclude=["computron", "colossalai"])
         colossalai.launch(
             {
                 "parallel": {
@@ -116,7 +116,7 @@ class OffloadingWorker:
                 max_size=pipe_size,
             )
 
-        self.logger = get_dist_logger("energonai")
+        self.logger = get_dist_logger("computron")
         self.logger.info(f"{self.rpc_name} start")
         self._start()
 

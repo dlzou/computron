@@ -43,7 +43,7 @@ class OffloadingEngine:
         queue_size: int = 0,
         rpc_disable_shm: bool = True,
     ):
-        self.logger = get_dist_logger("energonai")
+        self.logger = get_dist_logger("computron")
         if batch_manager is None:
             self.batch_manager = OffloadingBatchManager()
         else:
@@ -201,7 +201,7 @@ class OffloadingEngine:
                         self.completion_event[uid].set()
                     batch_size, start_time = self.timer_info.pop(entry_0.uids)
                     self.logger.info(
-                        f"{self.model_id} batch size: {batch_size}, time: {time.time() -start_time:.3f}"
+                        f"{self.model_id} batch size: {batch_size}, time: {time.time() - start_time:.3f}"
                     )
             else:
                 await asyncio.sleep(0.01)
