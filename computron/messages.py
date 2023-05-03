@@ -4,8 +4,17 @@ from typing import Hashable
 from pydantic import BaseModel
 
 
+class PingRequest(BaseModel):
+    pass
+
+
+class PingResponse(BaseModel):
+    pass
+
+
 class OffloadRequest(BaseModel):
-    loaded: bool
+    load: bool
+    flush: bool
 
 
 class OffloadResponse(BaseModel):
@@ -15,4 +24,5 @@ class OffloadResponse(BaseModel):
 @dataclass
 class OffloadEntry:
     uid: Hashable
-    loaded: bool
+    load: bool
+    flush: bool

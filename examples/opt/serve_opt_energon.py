@@ -38,7 +38,7 @@ if __name__ == "__main__":
         master_host="localhost",
         master_port=29600,
         rpc_port=29601,
-        model_fn=opt.get_model_fn("opt-125m"),
+        model_fn=opt.get_model_fn("opt-6.7b"),
         batch_manager=opt.BatchManagerForGeneration(
             max_batch_size=4, pad_token_id=tokenizer.pad_token_id
         ),

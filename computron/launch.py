@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import os
 import sys
 from typing import Any, Callable, Dict, List, Optional
 
@@ -47,15 +48,16 @@ def launch_offloading_workers(
     pp_world_size: int,
     n_proc_per_node: int = 1,
     node_rank: int = 0,
-    log_file: Optional[str] = None,
+    log_dir: Optional[str] = None,
 ):
     ctx = mp.get_context("spawn")
     procs = []
     for i in range(n_proc_per_node):
         rank = n_proc_per_node * node_rank + i
-        if log_file is None:
+        if log_dir is None:
             target = OffloadingWorker
         else:
+            log_file = os.path.join(log_dir, f"{config.model_id}_w{i}.log")
             target = LogWrapper(OffloadingWorker, log_file)
         p = ctx.Process(
             target=target,
@@ -85,12 +87,18 @@ def launch_multi_model(
     n_nodes: int,
     node_rank: int,
     controller_kwargs: Dict[str, Any],
-    log_file: Optional[str] = None,
+    log_dir: Optional[str] = None,
 ) -> Optional[Controller]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
     n_proc_per_node = world_size // n_nodes
+    if log_dir:
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+    if node_rank == 0:
+        ctlr = Controller(**controller_kwargs)
 
     ctx = mp.get_context("spawn")
     procs = []
@@ -102,11 +110,16 @@ def launch_multi_model(
             pp_world_size,
             n_proc_per_node,
             node_rank,
-            log_file,
+            log_dir,
         )
         if node_rank == 0:
+            if log_dir is None:
+                target = OffloadingEngine
+            else:
+                log_file = os.path.join(log_dir, f"{config.model_id}.log")
+                target = LogWrapper(OffloadingEngine, log_file)
             p = ctx.Process(
-                target=OffloadingEngine,
+                target=target,
                 args=(
                     tp_world_size,
                     pp_world_size,
@@ -127,11 +140,8 @@ def launch_multi_model(
             procs.append(p)
             p.start()
 
-    if node_rank == 0:
-        ctlr = Controller(**controller_kwargs)
-        for i in range(num_models):
-            config = model_configs[i]
             ctlr.register_model(config.model_id, config.master_host, config.request_port)
-        return ctlr
+
+    return ctlr
 
     # TODO: add signal handler that syncs with engines and workers

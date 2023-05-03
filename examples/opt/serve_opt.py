@@ -11,8 +11,9 @@ async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
         req = opt.OPTRequest(max_tokens=1, prompt="hello world")
-        target = i % 2
+        # target = 0
         # target = i // (num_reqs // 2)
+        target = i % 2
         resp: opt.OPTResponse = await ctlr.handle_request(f"opt{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
         print(resp.output)
@@ -20,12 +21,6 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('model', choices=['opt-125m', 'opt-6.7b', 'opt-30b', 'opt-175b'])
-    # parser.add_argument('--checkpoint', default=None)
-    # args = parser.parse_args()
-
-    model_name = "opt_125M"
     num_models = 2
     tp_world_size = 1
     pp_world_size = 2
@@ -42,7 +37,7 @@ if __name__ == "__main__":
             request_type=opt.OPTRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
-            model_fn=opt.opt_125M,
+            model_fn=opt.opt_1B,
             batch_manager=opt.OPTBatchManager(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
@@ -58,8 +53,7 @@ if __name__ == "__main__":
         controller_kwargs={
             "max_loaded": 1,
         },
-        # log_file="stdout.log",
+        # log_dir="logs",
     )
 
-    time.sleep(20)  # Wait for engine to start
     asyncio.run(make_requests(10))

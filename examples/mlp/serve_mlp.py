@@ -58,5 +58,4 @@ if __name__ == "__main__":
         },
     )
 
-    time.sleep(20)  # Wait for engine to start
     asyncio.run(make_requests(10, dim))

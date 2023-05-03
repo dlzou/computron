@@ -12,7 +12,13 @@ from pydantic import BaseModel
 import torch.distributed.rpc as trpc
 
 from computron.batch_mgr import OffloadingBatchManager
-from computron.offload import OffloadEntry, OffloadRequest, OffloadResponse
+from computron.messages import (
+    PingRequest,
+    PingResponse,
+    OffloadEntry,
+    OffloadRequest,
+    OffloadResponse,
+)
 from computron.utils import send_obj, recv_obj
 
 
@@ -130,7 +136,10 @@ class OffloadingEngine:
         if isinstance(req, self.request_type):
             entry: SubmitEntry = self.unpack_request_fn(req)
         elif isinstance(req, OffloadRequest):
-            entry: OffloadEntry = OffloadEntry(id(req), req.loaded)
+            entry: OffloadEntry = OffloadEntry(id(req), req.load, req.flush)
+        elif isinstance(req, PingRequest):
+            await send_obj(writer, PingResponse())
+            return
         assert entry.uid not in self.completion_map
         if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
             raise QueueFullError(f"Submit queue full, size: {self.queue_size}")
@@ -165,11 +174,11 @@ class OffloadingEngine:
                 if isinstance(entry, TaskEntry):
                     self.batch_info[entry.uids] = batch_info
                     self.timer_info[entry.uids] = (len(entry.uids), time.time())
-                elif isinstance(entry, OffloadEntry):
+                elif isinstance(entry, OffloadEntry) and not entry.flush:
                     # Bypass the completion loop
-                    self.completion_map[entry.uid] = entry.loaded
+                    self.completion_map[entry.uid] = entry.load
                     self.completion_event[entry.uid].set()
-                    self.logger.info(f"{self.model_id} loaded state: {entry.loaded}")
+                    self.logger.info(f"{self.model_id} loaded state: {entry.load}")
                 for pipe in self.submit_pipes:
                     pipe.send(entry)
             else:
@@ -203,5 +212,9 @@ class OffloadingEngine:
                     self.logger.info(
                         f"{self.model_id} batch size: {batch_size}, time: {time.time() - start_time:.3f}"
                     )
+                elif isinstance(entry_0, OffloadEntry) and entry_0.flush:
+                    self.completion_map[entry_0.uid] = entry_0.load
+                    self.completion_event[entry_0.uid].set()
+                    self.logger.info(f"{self.model_id} loaded state: {entry_0.load}")
             else:
                 await asyncio.sleep(0.01)

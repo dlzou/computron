@@ -2,7 +2,7 @@ from typing import Deque, Tuple, Union
 
 from energonai import BatchManager, SubmitEntry, TaskEntry
 
-from computron.offload import OffloadEntry
+from computron.messages import OffloadEntry
 
 
 class OffloadingBatchManager(BatchManager):

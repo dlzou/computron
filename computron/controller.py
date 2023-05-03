@@ -3,11 +3,20 @@ from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
 
-from computron.offload import OffloadRequest, OffloadResponse
+from computron.messages import PingRequest, OffloadRequest, OffloadResponse
 from computron.utils import send_obj, recv_obj
 
 
 class Controller:
+    """Dispatch requests to the target model, performing offloading as needed.
+
+    This class currently implements a simple LRU policy to cap the number of loaded models. In the
+    future, more sophisticated offloading and scheduling strategies can be explored. Some ideas:
+    - Cap total GPU memory used instead of number of models.
+    - Consider dependencies when scheduling requests, such as for autoregressive generation.
+    - Prefetch models into GPU memory.
+    """
+
     def __init__(self, max_loaded: int = 1):
         self.engines: Dict[str, Tuple[str, int]] = {}
         self.loaded: Dict[str, bool] = {}
@@ -19,15 +28,37 @@ class Controller:
         assert model_id not in self.engines, f"'{model_id}' already registered"
         self.engines[model_id] = (host, port)
         self.loaded[model_id] = False
+        asyncio.run(self._wait_model_init(model_id))
+
+    async def _wait_model_init(self, model_id):
+        while True:
+            try:
+                reader, writer = await asyncio.open_connection(*self.engines[model_id])
+                await send_obj(writer, PingRequest())
+                await recv_obj(reader)
+                writer.close()
+                await writer.wait_closed()
+                break
+            except OSError:
+                await asyncio.sleep(0.1)
+
+    async def get_heartbeat(self, model_id):
+        fut = asyncio.open_connection(*self.engines[model_id])
+        try:
+            reader, writer = await asyncio.wait_for(fut, timeout=5)
+            await send_obj(writer, PingRequest())
+            await recv_obj(reader)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     async def _swap_in(self, in_model_id: str):
-        # TODO: better swapping algorithm for >2 models?
         assert not self.loaded[in_model_id], f"{in_model_id} already loaded"
         swap_out = len(self.evict_queue) >= self.max_loaded
         if swap_out:
             out_model_id = self.evict_queue.pop(0)
             out_reader, out_writer = await asyncio.open_connection(*self.engines[out_model_id])
-            load_req = OffloadRequest(loaded=False)
+            load_req = OffloadRequest(load=False, flush=True)
             await send_obj(out_writer, load_req)
             load_resp: OffloadResponse = await recv_obj(out_reader)
             assert load_resp.success
@@ -35,7 +66,7 @@ class Controller:
             out_writer.close()
 
         in_reader, in_writer = await asyncio.open_connection(*self.engines[in_model_id])
-        load_req = OffloadRequest(loaded=True)
+        load_req = OffloadRequest(load=True, flush=False)
         await send_obj(in_writer, load_req)
         load_resp: OffloadResponse = await recv_obj(in_reader)
         assert load_resp.success
@@ -51,6 +82,9 @@ class Controller:
         async with self.request_lock:
             if not self.loaded[model_id]:
                 await self._swap_in(model_id)
+            else:
+                self.evict_queue.remove(model_id)
+                self.evict_queue.append(model_id)
             reader, writer = await asyncio.open_connection(*self.engines[model_id])
             await send_obj(writer, req)
 
