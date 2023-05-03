@@ -26,7 +26,7 @@ async def make_requests(num_reqs):
 if __name__ == "__main__":
     tp_world_size = 2
     pp_world_size = 1
-    
+
     engine = launch_engine(
         tp_world_size=tp_world_size,
         pp_world_size=pp_world_size,
@@ -36,5 +36,5 @@ if __name__ == "__main__":
         model_fn=partial(mlp.MLP, dim=256),
     )
 
-    time.sleep(15) # Wait for engine to start
+    time.sleep(15)  # Wait for engine to start
     asyncio.run(make_requests(20))

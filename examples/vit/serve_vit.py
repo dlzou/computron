@@ -1,11 +1,12 @@
 import asyncio
-from functools import partial
+import os
 import time
-from proc_img import proc_img
-from computron import launch_multi_model, ModelConfig
-import torch
 
+from computron import launch_multi_model, ModelConfig
+
+from proc_img import proc_img
 import vit
+
 
 ctlr = None
 
@@ -13,11 +14,17 @@ ctlr = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        img = proc_img('/data/yusun/xueyang/cs267/cs267-project/examples/vit/dataset/n01667114_9985.JPEG')    
-        req = vit.vitRequest(data=img)
-        target = i % 2
+        img = proc_img(
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "dataset/n01667114_9985.JPEG",
+            )
+        )
+        req = vit.ViTRequest(data=img)
+        # target = 0
         # target = i // (num_reqs // 2)
-        resp: vit.vitResponse = await ctlr.handle_request(f"vit{target}", req)
+        target = i % 2
+        resp: vit.ViTResponse = await ctlr.handle_request(f"vit{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
         print(resp.output.shape)
     print(f"Total time: {time.time() - start_time}")
@@ -26,24 +33,22 @@ async def make_requests(num_reqs):
 if __name__ == "__main__":
     num_models = 2
     tp_world_size = 1
-    pp_world_size = 1
-    first_port = 29234
-    # dim = 256
+    pp_world_size = 2
+    first_port = 29600
 
     configs = []
     for i in range(num_models):
         config = ModelConfig(
             model_id=f"vit{i}",
             master_host="localhost",
-            master_port=(first_port + 3*i),
-            rpc_port=(first_port + 3*i + 1),
-            request_port=(first_port + 3*i + 2),
-            request_type=vit.vitRequest,
+            master_port=(first_port + 3 * i),
+            rpc_port=(first_port + 3 * i + 1),
+            request_port=(first_port + 3 * i + 2),
+            request_type=vit.ViTRequest,
             unpack_request_fn=vit.unpack_request,
             pack_response_fn=vit.pack_response,
             model_fn=vit.create_vit,
-            # pipelinable=True,
-            batch_manager=vit.vitBatchManager(max_batch_size=1),
+            batch_manager=vit.ViTBatchManager(max_batch_size=1),
         )
         configs.append(config)
 
@@ -58,5 +63,5 @@ if __name__ == "__main__":
         },
     )
 
-    time.sleep(20) # Wait for engine to start
+    time.sleep(20)  # Wait for engine to start
     asyncio.run(make_requests(10))

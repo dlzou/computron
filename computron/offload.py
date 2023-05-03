@@ -11,8 +11,8 @@ class OffloadRequest(BaseModel):
 class OffloadResponse(BaseModel):
     success: bool
 
+
 @dataclass
 class OffloadEntry:
     uid: Hashable
     loaded: bool
-

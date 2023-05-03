@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import sys
 from typing import Any, Callable, Dict, List, Optional
 
 from energonai import BatchManager, SubmitEntry
@@ -29,19 +30,35 @@ class ModelConfig:
     model_kwargs: Dict[str, Any] = field(default_factory=dict)
 
 
+class LogWrapper:
+    def __init__(self, task: Callable, log_file: str):
+        self.task = task
+        self.log_file = log_file
+
+    def __call__(self, *args, **kwargs):
+        with open(self.log_file, "w+") as f:
+            sys.stdout = f
+            self.task(*args, **kwargs)
+
+
 def launch_offloading_workers(
     config: ModelConfig,
     tp_world_size: int,
     pp_world_size: int,
     n_proc_per_node: int = 1,
-    node_rank: int = 0, 
+    node_rank: int = 0,
+    log_file: Optional[str] = None,
 ):
     ctx = mp.get_context("spawn")
     procs = []
     for i in range(n_proc_per_node):
         rank = n_proc_per_node * node_rank + i
+        if log_file is None:
+            target = OffloadingWorker
+        else:
+            target = LogWrapper(OffloadingWorker, log_file)
         p = ctx.Process(
-            target=OffloadingWorker,
+            target=target,
             args=(
                 rank,
                 tp_world_size,
@@ -68,6 +85,7 @@ def launch_multi_model(
     n_nodes: int,
     node_rank: int,
     controller_kwargs: Dict[str, Any],
+    log_file: Optional[str] = None,
 ) -> Optional[Controller]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
@@ -78,7 +96,14 @@ def launch_multi_model(
     procs = []
     for i in range(num_models):
         config = model_configs[i]
-        launch_offloading_workers(config, tp_world_size, pp_world_size, n_proc_per_node, node_rank)
+        launch_offloading_workers(
+            config,
+            tp_world_size,
+            pp_world_size,
+            n_proc_per_node,
+            node_rank,
+            log_file,
+        )
         if node_rank == 0:
             p = ctx.Process(
                 target=OffloadingEngine,
@@ -97,7 +122,7 @@ def launch_multi_model(
                     config.pipe_size,
                     config.queue_size,
                     config.rpc_disable_shm,
-                )
+                ),
             )
             procs.append(p)
             p.start()

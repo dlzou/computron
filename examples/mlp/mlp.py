@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Any, Deque, Hashable, List, Tuple, Union
 
 import colossalai.nn as col_nn
@@ -67,7 +66,7 @@ class MLPBatchManager(OffloadingBatchManager):
             batch.append(entry.data)
         inputs = torch.stack(batch)
         return TaskEntry(tuple(uids), inputs), {}
-    
+
     def split_batch(self, task_entry: TaskEntry) -> List[Tuple[Hashable, Any]]:
         ret = []
         for uid, output in zip(task_entry.uids, task_entry.batch):

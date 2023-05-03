@@ -35,9 +35,9 @@ if __name__ == "__main__":
         config = ModelConfig(
             model_id=f"mlp{i}",
             master_host="localhost",
-            master_port=(first_port + 3*i),
-            rpc_port=(first_port + 3*i + 1),
-            request_port=(first_port + 3*i + 2),
+            master_port=(first_port + 3 * i),
+            rpc_port=(first_port + 3 * i + 1),
+            request_port=(first_port + 3 * i + 2),
             request_type=mlp.MLPRequest,
             unpack_request_fn=mlp.unpack_request,
             pack_response_fn=mlp.pack_response,
@@ -58,5 +58,5 @@ if __name__ == "__main__":
         },
     )
 
-    time.sleep(20) # Wait for engine to start
+    time.sleep(20)  # Wait for engine to start
     asyncio.run(make_requests(10, dim))

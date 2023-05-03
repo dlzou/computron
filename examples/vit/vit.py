@@ -1,22 +1,19 @@
 import os
-
-import torch
-from titans.model.vit.vit import _create_vit_model
-from tqdm import tqdm
 from typing import Any, Deque, Hashable, List, Tuple, Union
-from pydantic import BaseModel
-from energonai import SubmitEntry, TaskEntry
 
-import colossalai
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.logging import get_dist_logger
 from colossalai.pipeline.pipelinable import PipelinableContext
 from colossalai.utils import is_using_pp
 from computron import OffloadEntry, OffloadingBatchManager
+from energonai import SubmitEntry, TaskEntry
+from pydantic import BaseModel
+from titans.model.vit.vit import _create_vit_model
+import torch
 
-class DummyDataloader():
 
+class DummyDataloader:
     def __init__(self, length, batch_size):
         self.length = length
         self.batch_size = batch_size
@@ -57,13 +54,13 @@ def create_vit():
     MLP_RATIO = 4
     NUM_CLASSES = 10
     CHECKPOINT = False
-    SEQ_LENGTH = (IMG_SIZE // PATCH_SIZE)**2 + 1    # add 1 for cls token
+    SEQ_LENGTH = (IMG_SIZE // PATCH_SIZE) ** 2 + 1  # add 1 for cls token
 
     # get logger
     logger = get_dist_logger()
     logger.info("initialized distributed environment", ranks=[0])
 
-    if hasattr(gpc.config, 'LOG_PATH'):
+    if hasattr(gpc.config, "LOG_PATH"):
         if gpc.get_global_rank() == 0:
             log_path = gpc.config.LOG_PATH
             if not os.path.exists(log_path):
@@ -73,15 +70,17 @@ def create_vit():
     use_pipeline = is_using_pp()
 
     # create model
-    model_kwargs = dict(img_size=IMG_SIZE,
-                        patch_size=PATCH_SIZE,
-                        hidden_size=HIDDEN_SIZE,
-                        depth=DEPTH,
-                        num_heads=NUM_HEADS,
-                        # vit_ratio=MLP_RATIO,
-                        num_classes=10,
-                        init_method='jax',
-                        checkpoint=CHECKPOINT)
+    model_kwargs = dict(
+        img_size=IMG_SIZE,
+        patch_size=PATCH_SIZE,
+        hidden_size=HIDDEN_SIZE,
+        depth=DEPTH,
+        num_heads=NUM_HEADS,
+        # vit_ratio=MLP_RATIO,
+        num_classes=10,
+        init_method="jax",
+        checkpoint=CHECKPOINT,
+    )
 
     if use_pipeline:
         pipelinable = PipelinableContext()
@@ -89,7 +88,9 @@ def create_vit():
             model = _create_vit_model(**model_kwargs)
         pipelinable.to_layer_list()
         pipelinable.policy = "uniform"
-        model = pipelinable.partition(1, gpc.pipeline_parallel_size, gpc.get_local_rank(ParallelMode.PIPELINE))
+        model = pipelinable.partition(
+            1, gpc.pipeline_parallel_size, gpc.get_local_rank(ParallelMode.PIPELINE)
+        )
     else:
         model = _create_vit_model(**model_kwargs)
 
@@ -106,23 +107,23 @@ def create_vit():
     return model
 
 
-class vitRequest(BaseModel):
+class ViTRequest(BaseModel):
     data: Any
 
 
-class vitResponse(BaseModel):
+class ViTResponse(BaseModel):
     output: Any
 
 
-def unpack_request(req: vitRequest) -> SubmitEntry:
+def unpack_request(req: ViTRequest) -> SubmitEntry:
     return SubmitEntry(id(req), req.data)
 
 
-def pack_response(output: Any) -> vitResponse:
-    return vitResponse(output=output)
+def pack_response(output: Any) -> ViTResponse:
+    return ViTResponse(output=output)
 
 
-class vitBatchManager(OffloadingBatchManager):
+class ViTBatchManager(OffloadingBatchManager):
     def __init__(self, max_batch_size: int = 1):
         self.max_batch_size = max_batch_size
 
@@ -145,7 +146,7 @@ class vitBatchManager(OffloadingBatchManager):
             batch.append(entry.data)
         inputs = torch.stack(batch)
         return TaskEntry(tuple(uids), inputs), {}
-    
+
     def split_batch(self, task_entry: TaskEntry) -> List[Tuple[Hashable, Any]]:
         ret = []
         for uid, output in zip(task_entry.uids, task_entry.batch):

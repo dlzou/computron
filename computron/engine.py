@@ -1,6 +1,5 @@
 import asyncio
 from collections import deque
-from dataclasses import dataclass
 import signal
 import time
 from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple, Union
@@ -44,7 +43,7 @@ class OffloadingEngine:
         queue_size: int = 0,
         rpc_disable_shm: bool = True,
     ):
-        self.logger = get_dist_logger('energonai')
+        self.logger = get_dist_logger("energonai")
         if batch_manager is None:
             self.batch_manager = OffloadingBatchManager()
         else:
@@ -58,16 +57,20 @@ class OffloadingEngine:
             # SHM may lead to timeout error. Disabling SHM and only enabling uv transport can solve this problem.
             # See https://discuss.pytorch.org/t/rpc-behavior-difference-between-pytorch-1-7-0-vs-1-9-0/124772/5
             # This is a workaround and may be solved in the future.
-            rpc_options['_transports'] = ['uv']
-        trpc.init_rpc('master', rank=0, world_size=self.world_size + 1,
-                      rpc_backend_options=trpc.TensorPipeRpcBackendOptions(
-                          init_method=f'tcp://{master_host}:{rpc_port}',
-                          device_maps=build_device_maps(self.world_size, n_proc_per_node),
-                          **rpc_options
-                      ))
+            rpc_options["_transports"] = ["uv"]
+        trpc.init_rpc(
+            "master",
+            rank=0,
+            world_size=self.world_size + 1,
+            rpc_backend_options=trpc.TensorPipeRpcBackendOptions(
+                init_method=f"tcp://{master_host}:{rpc_port}",
+                device_maps=build_device_maps(self.world_size, n_proc_per_node),
+                **rpc_options,
+            ),
+        )
         self.from_worker_pipes: List[Pipe] = []
         for i in range(self.world_size):
-            pipe = Pipe(f'{i}_to_m', f'worker{i}', 'master')
+            pipe = Pipe(f"{i}_to_m", f"worker{i}", "master")
             self.from_worker_pipes.append(pipe)
         self.submit_pipes: List[Pipe] = []
         self.completion_pipes: List[Pipe] = []
@@ -75,25 +78,25 @@ class OffloadingEngine:
             worker_pp_rank = pipe.recv()
             if worker_pp_rank == 0:
                 self.submit_pipes.append(
-                    Pipe(f'm_to_{i}', 'master', f'worker{i}', max_size=pipe_size)
+                    Pipe(f"m_to_{i}", "master", f"worker{i}", max_size=pipe_size)
                 )
             if worker_pp_rank == pp_world_size - 1:
                 self.completion_pipes.append(pipe)
 
-        self.queue_size = queue_size # 0 means no limit
+        self.queue_size = queue_size  # 0 means no limit
         self.submit_queue: Deque[Union[SubmitEntry, OffloadEntry]] = deque()
         self.batch_info: Dict[Hashable, Any] = {}
         self.timer_info: Dict[Hashable, Tuple[int, float]] = {}
         self.completion_map: Dict[Hashable, Any] = {}
         self.completion_event: Dict[Hashable, asyncio.Event] = {}
-        
+
         self.master_host = master_host
         self.request_port = request_port
         self.request_type: BaseModel = request_type
         self.unpack_request_fn: Callable = unpack_request_fn
         self.pack_response_fn: Callable = pack_response_fn
 
-        self.logger.info(F"{self.model_id} engine started")
+        self.logger.info(f"{self.model_id} engine started")
         self._start()
 
     def _start(self):
@@ -114,7 +117,7 @@ class OffloadingEngine:
         # TODO: shutdown workers
         Terminator.shield()
         for i in range(self.world_size):
-            trpc.rpc_sync(f'worker{i}', Terminator.terminate)
+            trpc.rpc_sync(f"worker{i}", Terminator.terminate)
         trpc.shutdown()
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -130,7 +133,7 @@ class OffloadingEngine:
             entry: OffloadEntry = OffloadEntry(id(req), req.loaded)
         assert entry.uid not in self.completion_map
         if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
-            raise QueueFullError(f'Submit queue full, size: {self.queue_size}')
+            raise QueueFullError(f"Submit queue full, size: {self.queue_size}")
         self.completion_event[entry.uid] = asyncio.Event()
         self.submit_queue.append(entry)
         await self.completion_event[entry.uid].wait()
@@ -166,9 +169,7 @@ class OffloadingEngine:
                     # Bypass the completion loop
                     self.completion_map[entry.uid] = entry.loaded
                     self.completion_event[entry.uid].set()
-                    self.logger.info(
-                        f"{self.model_id} loaded state: {entry.loaded}"
-                    )
+                    self.logger.info(f"{self.model_id} loaded state: {entry.loaded}")
                 for pipe in self.submit_pipes:
                     pipe.send(entry)
             else:
@@ -185,13 +186,15 @@ class OffloadingEngine:
                         pass
             if len(received_data) == len(self.completion_pipes):
                 # TODO: validate all entries are the same
-                entries: List[Union[TaskEntry, OffloadEntry]] = list(map(
-                    lambda k: received_data[k],
-                    sorted(received_data.keys()),
-                ))
+                entries: List[Union[TaskEntry, OffloadEntry]] = list(
+                    map(
+                        lambda k: received_data[k],
+                        sorted(received_data.keys()),
+                    )
+                )
                 received_data.clear()
                 entry_0 = entries[0]
-                if isinstance(entry_0, TaskEntry): 
+                if isinstance(entry_0, TaskEntry):
                     batch_info = self.batch_info.pop(entry_0.uids)
                     for uid, output in self.batch_manager.split_batch(entry_0, **batch_info):
                         self.completion_map[uid] = output

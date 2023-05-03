@@ -1,13 +1,12 @@
 import asyncio
-from functools import partial
 import time
+
 from pydantic import Field
 from computron import launch_multi_model, ModelConfig
-import torch
-from transformers import GPT2Tokenizer
 import opt
 
 ctlr = None
+
 
 async def make_requests(num_reqs):
     start_time = time.time()
@@ -23,29 +22,31 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     # parser = argparse.ArgumentParser()
-    # parser.add_argument('model', choices=['opt-125m', 'opt-6.7b', 'opt-30b', 'opt-175b'])  
+    # parser.add_argument('model', choices=['opt-125m', 'opt-6.7b', 'opt-30b', 'opt-175b'])
     # parser.add_argument('--checkpoint', default=None)
     # args = parser.parse_args()
 
-    model_name = 'opt_125M'
+    model_name = "opt_125M"
     num_models = 2
     tp_world_size = 1
     pp_world_size = 2
-    first_port = 29900
+    first_port = 29600
 
     configs = []
     for i in range(num_models):
         config = ModelConfig(
             model_id=f"opt{i}",
             master_host="localhost",
-            master_port=(first_port + 3*i),
-            rpc_port=(first_port + 3*i + 1),
-            request_port=(first_port + 3*i + 2),
+            master_port=(first_port + 3 * i),
+            rpc_port=(first_port + 3 * i + 1),
+            request_port=(first_port + 3 * i + 2),
             request_type=opt.OptRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
-            model_fn=opt.get_model_fn('opt-125m'),
-            batch_manager=opt.BatchManagerForGeneration(max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id),
+            model_fn=opt.opt_125M,
+            batch_manager=opt.BatchManagerForGeneration(
+                max_batch_size=1, pad_token_id=opt.tokenizer.pad_token_id
+            ),
         )
         configs.append(config)
 
@@ -58,7 +59,8 @@ if __name__ == "__main__":
         controller_kwargs={
             "max_loaded": 1,
         },
+        # log_file="stdout.log",
     )
 
-    time.sleep(20) # Wait for engine to start
+    time.sleep(20)  # Wait for engine to start
     asyncio.run(make_requests(10))
