@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import asyncio
 from typing import Dict, List, Tuple
 
@@ -7,15 +8,28 @@ from computron.messages import PingRequest, OffloadRequest, OffloadResponse
 from computron.utils import send_obj, recv_obj
 
 
-class Controller:
-    """Dispatch requests to the target model, performing offloading as needed.
+"""
+Ideas for more controllers with more sophisticated offloading and scheduling strategies:
+- Cap total GPU memory used instead of number of models.
+- Consider dependencies when scheduling requests, such as for autoregressive generation.
+- Prefetch models into GPU memory.
+"""
 
-    This class currently implements a simple LRU policy to cap the number of loaded models. In the
-    future, more sophisticated offloading and scheduling strategies can be explored. Some ideas:
-    - Cap total GPU memory used instead of number of models.
-    - Consider dependencies when scheduling requests, such as for autoregressive generation.
-    - Prefetch models into GPU memory.
-    """
+
+class Controller:
+    """Dispatch requests to the target model, performing offloading as needed."""
+
+    @abstractmethod
+    def register_model(self, model_id: str, host: str, port: int):
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def handle_request(self, model_id: str, req: BaseModel):
+        raise NotImplementedError()
+
+
+class LRUController(Controller):
+    """Controller with simple LRU policy to cap the number of loaded models."""
 
     def __init__(self, max_loaded: int = 1):
         self.engines: Dict[str, Tuple[str, int]] = {}

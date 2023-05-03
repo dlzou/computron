@@ -8,7 +8,7 @@ from proc_img import proc_img
 import vit
 
 
-ctlr = None
+controller = None
 
 
 async def make_requests(num_reqs):
@@ -24,7 +24,7 @@ async def make_requests(num_reqs):
         # target = 0
         # target = i // (num_reqs // 2)
         target = i % 2
-        resp: vit.ViTResponse = await ctlr.handle_request(f"vit{target}", req)
+        resp: vit.ViTResponse = await controller.handle_request(f"vit{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
         print(resp.output.shape)
     print(f"Total time: {time.time() - start_time}")
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         )
         configs.append(config)
 
-    ctlr = launch_multi_model(
+    controller = launch_multi_model(
         configs,
         tp_world_size=tp_world_size,
         pp_world_size=pp_world_size,
