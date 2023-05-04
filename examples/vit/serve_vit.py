@@ -1,8 +1,11 @@
 import asyncio
+import os
 import time
 
 from computron import launch_multi_model, ModelConfig
-import opt
+
+from proc_img import proc_img
+import vit
 
 
 controller = None
@@ -11,13 +14,19 @@ controller = None
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        req = opt.OPTRequest(max_tokens=1, prompt="hello world")
+        img = proc_img(
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "dataset/n01667114_9985.JPEG",
+            )
+        )
+        req = vit.ViTRequest(data=img)
         # target = 0
         # target = i // (num_reqs // 2)
         target = i % 2
-        resp: opt.OPTResponse = await controller.handle_request(f"opt{target}", req)
+        resp: vit.ViTResponse = await controller.handle_request(f"vit{target}", req)
         print(f"Response time {i}: {time.time() - start_time}")
-        print(resp.output)
+        print(resp.output.shape)
     print(f"Total time: {time.time() - start_time}")
 
 
@@ -30,18 +39,16 @@ if __name__ == "__main__":
     configs = []
     for i in range(num_models):
         config = ModelConfig(
-            model_id=f"opt{i}",
+            model_id=f"vit{i}",
             master_host="localhost",
             master_port=(first_port + 3 * i),
             rpc_port=(first_port + 3 * i + 1),
             request_port=(first_port + 3 * i + 2),
-            request_type=opt.OPTRequest,
-            unpack_request_fn=opt.unpack_request,
-            pack_response_fn=opt.pack_response,
-            model_fn=opt.opt_1B,
-            batch_manager=opt.OPTBatchManager(
-                max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
-            ),
+            request_type=vit.ViTRequest,
+            unpack_request_fn=vit.unpack_request,
+            pack_response_fn=vit.pack_response,
+            model_fn=vit.create_vit,
+            batch_manager=vit.ViTBatchManager(max_batch_size=1),
         )
         configs.append(config)
 
@@ -54,7 +61,6 @@ if __name__ == "__main__":
         controller_kwargs={
             "max_loaded": 1,
         },
-        # log_dir="logs",
     )
 
     asyncio.run(make_requests(10))

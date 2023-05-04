@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import os
 import sys
 from typing import Any, Callable, Dict, List, Optional
 
@@ -6,7 +7,7 @@ from energonai import BatchManager, SubmitEntry
 from pydantic import BaseModel
 import torch.multiprocessing as mp
 
-from computron.controller import Controller
+from computron.controller import Controller, LRUController
 from computron.engine import OffloadingEngine
 from computron.worker import OffloadingWorker
 
@@ -41,21 +42,22 @@ class LogWrapper:
             self.task(*args, **kwargs)
 
 
-def launch_offloading_workers(
+def _launch_offloading_workers(
     config: ModelConfig,
     tp_world_size: int,
     pp_world_size: int,
     n_proc_per_node: int = 1,
     node_rank: int = 0,
-    log_file: Optional[str] = None,
+    log_dir: Optional[str] = None,
 ):
     ctx = mp.get_context("spawn")
     procs = []
     for i in range(n_proc_per_node):
         rank = n_proc_per_node * node_rank + i
-        if log_file is None:
+        if log_dir is None:
             target = OffloadingWorker
         else:
+            log_file = os.path.join(log_dir, f"{config.model_id}_w{i}.log")
             target = LogWrapper(OffloadingWorker, log_file)
         p = ctx.Process(
             target=target,
@@ -78,35 +80,52 @@ def launch_offloading_workers(
         p.start()
 
 
+_controllers = {
+    "lru": LRUController,
+}
+
+
 def launch_multi_model(
     model_configs: List[ModelConfig],
     tp_world_size: int,
     pp_world_size: int,
     n_nodes: int,
     node_rank: int,
-    controller_kwargs: Dict[str, Any],
-    log_file: Optional[str] = None,
+    controller_type: str = "lru",
+    controller_kwargs: Optional[Dict[str, Any]] = {},
+    log_dir: Optional[str] = None,
 ) -> Optional[Controller]:
     num_models = len(model_configs)
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
     n_proc_per_node = world_size // n_nodes
 
+    if node_rank == 0:
+        controller = _controllers[controller_type.lower()](**controller_kwargs)
+    if log_dir:
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
     ctx = mp.get_context("spawn")
     procs = []
+
     for i in range(num_models):
         config = model_configs[i]
-        launch_offloading_workers(
+        _launch_offloading_workers(
             config,
             tp_world_size,
             pp_world_size,
             n_proc_per_node,
             node_rank,
-            log_file,
+            log_dir,
         )
         if node_rank == 0:
+            if log_dir is None:
+                target = OffloadingEngine
+            else:
+                log_file = os.path.join(log_dir, f"{config.model_id}.log")
+                target = LogWrapper(OffloadingEngine, log_file)
             p = ctx.Process(
-                target=OffloadingEngine,
+                target=target,
                 args=(
                     tp_world_size,
                     pp_world_size,
@@ -127,11 +146,8 @@ def launch_multi_model(
             procs.append(p)
             p.start()
 
-    if node_rank == 0:
-        ctlr = Controller(**controller_kwargs)
-        for i in range(num_models):
-            config = model_configs[i]
-            ctlr.register_model(config.model_id, config.master_host, config.request_port)
-        return ctlr
+            controller.register_model(config.model_id, config.master_host, config.request_port)
+
+    return controller
 
     # TODO: add signal handler that syncs with engines and workers

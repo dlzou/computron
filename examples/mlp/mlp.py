@@ -1,7 +1,6 @@
 from typing import Any, Deque, Hashable, List, Tuple, Union
 
 import colossalai.nn as col_nn
-from colossalai.utils import print_rank_0
 from computron import OffloadEntry, OffloadingBatchManager
 from energonai import SubmitEntry, TaskEntry
 from pydantic import BaseModel
@@ -42,7 +41,6 @@ def pack_response(output: Any) -> MLPResponse:
     return MLPResponse(output=output)
 
 
-# TODO: write own parent OffloadingBatchManager
 class MLPBatchManager(OffloadingBatchManager):
     def __init__(self, max_batch_size: int = 1):
         self.max_batch_size = max_batch_size

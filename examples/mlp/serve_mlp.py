@@ -25,8 +25,8 @@ async def make_requests(num_reqs, dim):
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 2
-    pp_world_size = 1
+    tp_world_size = 1
+    pp_world_size = 2
     first_port = 29600
     dim = 256
 
@@ -58,5 +58,4 @@ if __name__ == "__main__":
         },
     )
 
-    time.sleep(20)  # Wait for engine to start
     asyncio.run(make_requests(10, dim))

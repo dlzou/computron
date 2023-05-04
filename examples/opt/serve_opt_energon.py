@@ -23,14 +23,14 @@ async def make_requests(num_reqs):
         engine.submit(uid, inputs)
         output = await engine.wait(uid)
         print(f"Response time {i}: {time.time() - start_time}")
-        output = tokenizer.decode(output, skip_special_tokens=True)
-        print(output)
+        output_seq = tokenizer.decode(output, skip_special_tokens=True)
+        print(output_seq)
     print(f"Total time: {time.time() - start_time}")
 
 
 if __name__ == "__main__":
-    tp_world_size = 2
-    pp_world_size = 1
+    tp_world_size = 1
+    pp_world_size = 2
 
     engine = launch_engine(
         tp_world_size=tp_world_size,
@@ -38,11 +38,11 @@ if __name__ == "__main__":
         master_host="localhost",
         master_port=29600,
         rpc_port=29601,
-        model_fn=opt.get_model_fn("opt-125m"),
+        model_fn=opt.get_model_fn("opt-6.7b"),
         batch_manager=opt.BatchManagerForGeneration(
-            max_batch_size=5, pad_token_id=tokenizer.pad_token_id
+            max_batch_size=4, pad_token_id=tokenizer.pad_token_id
         ),
     )
 
-    time.sleep(15)  # Wait for engine to start
+    time.sleep(10)  # Wait for engine to start
     asyncio.run(make_requests(10))

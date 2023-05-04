@@ -14,7 +14,7 @@ import torch
 import torch.distributed.rpc as trpc
 import torch.nn as nn
 
-from computron.offload import OffloadEntry
+from computron.messages import OffloadEntry
 
 
 class OffloadingWorker:
@@ -37,7 +37,7 @@ class OffloadingWorker:
         self.world_size = tp_world_size * pp_world_size
         self.tp_world_size = tp_world_size
         self.pp_world_size = pp_world_size
-        disable_existing_loggers(exclude=["energonai", "colossalai"])
+        disable_existing_loggers(exclude=["computron", "colossalai"])
         colossalai.launch(
             {
                 "parallel": {
@@ -67,9 +67,12 @@ class OffloadingWorker:
                 num_chunks=1,
                 pipeline_size=pp_world_size,
                 rank=self.pp_rank,
-            ).to("cpu")
+            )
         else:
-            self.model: nn.Module = model_fn(**model_kwargs).to("cpu")
+            self.model: nn.Module = model_fn(**model_kwargs)
+        self.model.eval()
+        self.model.to("cpu")
+        torch.cuda.empty_cache()
 
         self.rpc_name = f"worker{self.global_rank}"
         rpc_options = {}
@@ -116,7 +119,7 @@ class OffloadingWorker:
                 max_size=pipe_size,
             )
 
-        self.logger = get_dist_logger("energonai")
+        self.logger = get_dist_logger("computron")
         self.logger.info(f"{self.rpc_name} start")
         self._start()
 
@@ -137,10 +140,12 @@ class OffloadingWorker:
                             outputs = self._forward(entry.batch)
                         self.output_pipe.send(TaskEntry(entry.uids, outputs))
                     elif isinstance(entry, OffloadEntry):
-                        if entry.loaded:
-                            self.model.to("cuda")
-                        else:
-                            self.model.to("cpu")
+                        with torch.inference_mode():
+                            if entry.load:
+                                self.model.to("cuda", non_blocking=True)
+                            else:
+                                self.model.to("cpu", non_blocking=True)
+                                torch.cuda.empty_cache()
                         self.output_pipe.send(entry)
                 except RuntimeError:
                     time.sleep(0.01)
