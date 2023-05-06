@@ -5,6 +5,7 @@ import torch
 import os
 import pickle
 import sys
+import queue
 
 # print(os.path.abspath(os.path.curdir))
 # sys.path.append(os.path.abspath("."))
@@ -18,6 +19,8 @@ import socket
 HOST = "localhost"
 PORT = 5000
 
+msg_queue=None
+
 
 class Server:
     def __init__(self):
@@ -28,12 +31,19 @@ class Server:
     def bind(self, engine):
         self.engine = engine
 
-    async def monitor(self):
+    def monitor(self):
         while True:
-            data_bytes, addr = self.sock.recvfrom(10240)
+            # data_bytes, addr = self.sock.recvfrom(10240)
+            if msg_queue.empty():
+                continue
+            sender_id, data_bytes=msg_queue.get()
             data = pickle.loads(data_bytes)
-            print("Received:", data)
-            self.sock.sendto(b"Received", addr)
+            print("Received from {}: {}".format(sender_id,data))
+
+            # self.sock.sendto(b"Received", addr)
+
+            #AWAIT?
+
             print("Response id: ", self.responseid)
             self.responseid += 1
             uid = id(data)
@@ -42,10 +52,11 @@ class Server:
 
 
 class Client:
-    def __init__(self, a, b) -> None:
+    def __init__(self, a, b, model_id) -> None:
         self.process = workload.GammaProcess(a, b)
         self.url = "localhost:1234"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.model_id=model_id
 
     def gen(self, st, duration, seed=0):
         self.request_time = self.process.generate_arrivals(st, duration, seed)
@@ -64,11 +75,14 @@ class Client:
             ctime = time.time()
             print("current request time: ", time.time() - ptime)
 
-            # send
+            #  send from client to server (a request)
             data = torch.ones((256,))
             data_bytes = pickle.dumps(data)
-            self.sock.sendto(data_bytes, (HOST, PORT))
-            response, addr = self.sock.recvfrom(1024)
+            
+            msg_queue.put((self.id, data_bytes))
+
+            # self.sock.sendto(data_bytes, (HOST, PORT))
+            # response, addr = self.sock.recvfrom(1024)
 
             print(f"Response status code: {response.decode()}")
 
@@ -96,14 +110,25 @@ if __name__ == "__main__":
 
     time.sleep(15)  # Wait for engine to start
 
-    client = Client(1, 2)
-    client.gen(0, 10)
+    msg_queue=queue.Queue()
+
+    clients=[]
+    clients.append(Client(1, 2, 1))
+    clients.append(Client(1, 2, 2))
+    # client = Client(1, 2, 1)
+    for i in range(len(clients)):
+        clients[i].gen(0, 10)
 
     server = Server()
     server.bind(engine)
 
-    client_thread = threading.Thread(target=client.start)
+    client_threads = [None]*2
+    for i in range(len(clients)):
+        client_threads[i] = threading.Thread(target=clients[i].start)
+
     server_thread = threading.Thread(target=server.monitor)
 
     server_thread.start()
-    client_thread.start()
+
+    for i in range(len(client_threads)):
+        client_threads[i].start()
