@@ -23,8 +23,8 @@ async def make_requests(num_reqs):
 
 if __name__ == "__main__":
     num_models = 2
-    tp_world_size = 1
-    pp_world_size = 2
+    tp_world_size = 2
+    pp_world_size = 1
     first_port = 29600
 
     configs = []
@@ -38,7 +38,7 @@ if __name__ == "__main__":
             request_type=opt.OPTRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
-            model_fn=opt.opt_1B,
+            model_fn=opt.opt_6B,
             batch_manager=opt.OPTBatchManager(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),

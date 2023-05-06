@@ -1,7 +1,7 @@
 from typing import List, Deque, Tuple, Hashable, Any, Union, Optional
 
 from colossalai.logging import get_dist_logger
-from computron import OffloadEntry, OffloadingBatchManager
+from computron import LoadEntry, OffloadingBatchManager
 from energonai import BatchManager, SubmitEntry, TaskEntry
 from energonai.model import opt_125M, opt_1B, opt_6B, opt_30B, opt_175B
 from pydantic import BaseModel, Field
@@ -81,17 +81,17 @@ class OPTBatchManager(OffloadingBatchManager):
         return (data["top_k"], data["top_p"], data["temperature"])
 
     def make_batch(
-        self, q: Deque[Union[SubmitEntry, OffloadEntry]]
-    ) -> Tuple[Union[TaskEntry, OffloadEntry], dict]:
+        self, q: Deque[Union[SubmitEntry, LoadEntry]]
+    ) -> Tuple[Union[TaskEntry, LoadEntry], dict]:
         entry = q.popleft()
-        if isinstance(entry, OffloadEntry):
+        if isinstance(entry, LoadEntry):
             return entry, {}
         uids = [entry.uid]
         batch = [entry.data]
         while len(batch) < self.max_batch_size:
             if len(q) == 0:
                 break
-            if isinstance(q[0], OffloadEntry):
+            if isinstance(q[0], LoadEntry):
                 break
             if self._make_batch_key(entry) != self._make_batch_key(q[0]):
                 break

@@ -15,9 +15,9 @@ from computron.batch_mgr import OffloadingBatchManager
 from computron.messages import (
     PingRequest,
     PingResponse,
-    OffloadEntry,
-    OffloadRequest,
-    OffloadResponse,
+    LoadEntry,
+    LoadRequest,
+    LoadResponse,
 )
 from computron.utils import send_obj, recv_obj
 
@@ -90,7 +90,7 @@ class OffloadingEngine:
                 self.completion_pipes.append(pipe)
 
         self.queue_size = queue_size  # 0 means no limit
-        self.submit_queue: Deque[Union[SubmitEntry, OffloadEntry]] = deque()
+        self.submit_queue: Deque[Union[SubmitEntry, LoadEntry]] = deque()
         self.batch_info: Dict[Hashable, Any] = {}
         self.timer_info: Dict[Hashable, Tuple[int, float]] = {}
         self.completion_map: Dict[Hashable, Any] = {}
@@ -135,8 +135,8 @@ class OffloadingEngine:
         req = await recv_obj(reader)
         if isinstance(req, self.request_type):
             entry: SubmitEntry = self.unpack_request_fn(req)
-        elif isinstance(req, OffloadRequest):
-            entry: OffloadEntry = OffloadEntry(id(req), req.load, req.flush)
+        elif isinstance(req, LoadRequest):
+            entry: LoadEntry = LoadEntry(id(req), req.load, req.flush)
         elif isinstance(req, PingRequest):
             await send_obj(writer, PingResponse())
             return
@@ -151,8 +151,8 @@ class OffloadingEngine:
         output = self.completion_map.pop(entry.uid)
         if isinstance(entry, SubmitEntry):
             resp = self.pack_response_fn(output)
-        elif isinstance(entry, OffloadEntry):
-            resp = OffloadResponse(success=True)
+        elif isinstance(entry, LoadEntry):
+            resp = LoadResponse(success=True)
         await send_obj(writer, resp)
 
         writer.close()
@@ -174,7 +174,7 @@ class OffloadingEngine:
                 if isinstance(entry, TaskEntry):
                     self.batch_info[entry.uids] = batch_info
                     self.timer_info[entry.uids] = (len(entry.uids), time.time())
-                elif isinstance(entry, OffloadEntry) and not entry.flush:
+                elif isinstance(entry, LoadEntry) and not entry.flush:
                     # Bypass the completion loop
                     self.completion_map[entry.uid] = entry.load
                     self.completion_event[entry.uid].set()
@@ -195,7 +195,7 @@ class OffloadingEngine:
                         pass
             if len(received_data) == len(self.completion_pipes):
                 # TODO: validate all entries are the same
-                entries: List[Union[TaskEntry, OffloadEntry]] = list(
+                entries: List[Union[TaskEntry, LoadEntry]] = list(
                     map(
                         lambda k: received_data[k],
                         sorted(received_data.keys()),
@@ -212,7 +212,7 @@ class OffloadingEngine:
                     self.logger.info(
                         f"{self.model_id} batch size: {batch_size}, time: {time.time() - start_time:.3f}"
                     )
-                elif isinstance(entry_0, OffloadEntry) and entry_0.flush:
+                elif isinstance(entry_0, LoadEntry) and entry_0.flush:
                     self.completion_map[entry_0.uid] = entry_0.load
                     self.completion_event[entry_0.uid].set()
                     self.logger.info(f"{self.model_id} loaded state: {entry_0.load}")

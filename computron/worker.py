@@ -14,7 +14,7 @@ import torch
 import torch.distributed.rpc as trpc
 import torch.nn as nn
 
-from computron.messages import OffloadEntry
+from computron.messages import LoadEntry
 
 
 class OffloadingWorker:
@@ -121,6 +121,7 @@ class OffloadingWorker:
 
         self.logger = get_dist_logger("computron")
         self.logger.info(f"{self.rpc_name} start")
+        self.logger.info(f"{self.rpc_name} dtype: {next(self.model.parameters()).dtype}")
         self._start()
 
     @contextmanager
@@ -139,7 +140,7 @@ class OffloadingWorker:
                         with torch.inference_mode():
                             outputs = self._forward(entry.batch)
                         self.output_pipe.send(TaskEntry(entry.uids, outputs))
-                    elif isinstance(entry, OffloadEntry):
+                    elif isinstance(entry, LoadEntry):
                         with torch.inference_mode():
                             if entry.load:
                                 self.model.to("cuda", non_blocking=True)

@@ -1,7 +1,7 @@
 from typing import Any, Deque, Hashable, List, Tuple, Union
 
 import colossalai.nn as col_nn
-from computron import OffloadEntry, OffloadingBatchManager
+from computron import LoadEntry, OffloadingBatchManager
 from energonai import SubmitEntry, TaskEntry
 from pydantic import BaseModel
 import torch
@@ -46,10 +46,10 @@ class MLPBatchManager(OffloadingBatchManager):
         self.max_batch_size = max_batch_size
 
     def make_batch(
-        self, q: Deque[Union[SubmitEntry, OffloadEntry]]
-    ) -> Tuple[Union[TaskEntry, OffloadEntry], dict]:
+        self, q: Deque[Union[SubmitEntry, LoadEntry]]
+    ) -> Tuple[Union[TaskEntry, LoadEntry], dict]:
         entry = q.popleft()
-        if isinstance(entry, OffloadEntry):
+        if isinstance(entry, LoadEntry):
             return entry, {}
 
         uids = [entry.uid]
@@ -57,7 +57,7 @@ class MLPBatchManager(OffloadingBatchManager):
         while len(batch) < self.max_batch_size:
             if len(q) == 0:
                 break
-            if isinstance(q[0], OffloadEntry):
+            if isinstance(q[0], LoadEntry):
                 break
             entry = q.popleft()
             uids.append(entry.uid)

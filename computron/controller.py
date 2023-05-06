@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
 
-from computron.messages import PingRequest, OffloadRequest, OffloadResponse
+from computron.messages import PingRequest, LoadRequest, LoadResponse
 from computron.utils import send_obj, recv_obj
 
 
@@ -72,17 +72,17 @@ class LRUController(Controller):
         if swap_out:
             out_model_id = self.evict_queue.pop(0)
             out_reader, out_writer = await asyncio.open_connection(*self.engines[out_model_id])
-            load_req = OffloadRequest(load=False, flush=True)
+            load_req = LoadRequest(load=False, flush=True)
             await send_obj(out_writer, load_req)
-            load_resp: OffloadResponse = await recv_obj(out_reader)
+            load_resp: LoadResponse = await recv_obj(out_reader)
             assert load_resp.success
             self.loaded[out_model_id] = False
             out_writer.close()
 
         in_reader, in_writer = await asyncio.open_connection(*self.engines[in_model_id])
-        load_req = OffloadRequest(load=True, flush=False)
+        load_req = LoadRequest(load=True, flush=False)
         await send_obj(in_writer, load_req)
-        load_resp: OffloadResponse = await recv_obj(in_reader)
+        load_resp: LoadResponse = await recv_obj(in_reader)
         assert load_resp.success
         in_writer.close()
 

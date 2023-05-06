@@ -6,7 +6,7 @@ from colossalai.core import global_context as gpc
 from colossalai.logging import get_dist_logger
 from colossalai.pipeline.pipelinable import PipelinableContext
 from colossalai.utils import is_using_pp
-from computron import OffloadEntry, OffloadingBatchManager
+from computron import LoadEntry, OffloadingBatchManager
 from energonai import SubmitEntry, TaskEntry
 from pydantic import BaseModel
 from titans.model.vit.vit import _create_vit_model
@@ -128,10 +128,10 @@ class ViTBatchManager(OffloadingBatchManager):
         self.max_batch_size = max_batch_size
 
     def make_batch(
-        self, q: Deque[Union[SubmitEntry, OffloadEntry]]
-    ) -> Tuple[Union[TaskEntry, OffloadEntry], dict]:
+        self, q: Deque[Union[SubmitEntry, LoadEntry]]
+    ) -> Tuple[Union[TaskEntry, LoadEntry], dict]:
         entry = q.popleft()
-        if isinstance(entry, OffloadEntry):
+        if isinstance(entry, LoadEntry):
             return entry, {}
 
         uids = [entry.uid]
@@ -139,7 +139,7 @@ class ViTBatchManager(OffloadingBatchManager):
         while len(batch) < self.max_batch_size:
             if len(q) == 0:
                 break
-            if isinstance(q[0], OffloadEntry):
+            if isinstance(q[0], LoadEntry):
                 break
             entry = q.popleft()
             uids.append(entry.uid)

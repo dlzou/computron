@@ -12,17 +12,17 @@ class PingResponse(BaseModel):
     pass
 
 
-class OffloadRequest(BaseModel):
+class LoadRequest(BaseModel):
     load: bool
     flush: bool
 
 
-class OffloadResponse(BaseModel):
+class LoadResponse(BaseModel):
     success: bool
 
 
 @dataclass
-class OffloadEntry:
+class LoadEntry:
     uid: Hashable
     load: bool
     flush: bool
