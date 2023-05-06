@@ -16,7 +16,7 @@ Ideas for more controllers with more sophisticated offloading and scheduling str
 """
 
 
-class Controller:
+class Controller(ABC):
     """Dispatch requests to the target model, performing offloading as needed."""
 
     @abstractmethod

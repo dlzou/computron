@@ -19,7 +19,7 @@ import socket
 HOST = "localhost"
 PORT = 5000
 
-msg_queue=None
+msg_queue = None
 
 
 class Server:
@@ -36,13 +36,13 @@ class Server:
             # data_bytes, addr = self.sock.recvfrom(10240)
             if msg_queue.empty():
                 continue
-            sender_id, data_bytes=msg_queue.get()
+            sender_id, data_bytes = msg_queue.get()
             data = pickle.loads(data_bytes)
-            print("Received from {}: {}".format(sender_id,data))
+            print("Received from {}: {}".format(sender_id, data))
 
             # self.sock.sendto(b"Received", addr)
 
-            #AWAIT?
+            # AWAIT?
 
             print("Response id: ", self.responseid)
             self.responseid += 1
@@ -56,7 +56,7 @@ class Client:
         self.process = workload.GammaProcess(a, b)
         self.url = "localhost:1234"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.model_id=model_id
+        self.model_id = model_id
 
     def gen(self, st, duration, seed=0):
         self.request_time = self.process.generate_arrivals(st, duration, seed)
@@ -78,7 +78,7 @@ class Client:
             #  send from client to server (a request)
             data = torch.ones((256,))
             data_bytes = pickle.dumps(data)
-            
+
             msg_queue.put((self.id, data_bytes))
 
             # self.sock.sendto(data_bytes, (HOST, PORT))
@@ -110,9 +110,9 @@ if __name__ == "__main__":
 
     time.sleep(15)  # Wait for engine to start
 
-    msg_queue=queue.Queue()
+    msg_queue = queue.Queue()
 
-    clients=[]
+    clients = []
     clients.append(Client(1, 2, 1))
     clients.append(Client(1, 2, 2))
     # client = Client(1, 2, 1)
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     server = Server()
     server.bind(engine)
 
-    client_threads = [None]*2
+    client_threads = [None] * 2
     for i in range(len(clients)):
         client_threads[i] = threading.Thread(target=clients[i].start)
 

@@ -5,10 +5,13 @@ import logging
 
 from computron import launch_multi_model, ModelConfig
 
+# TODO: package example models
 import sys
 import os
-sys.path.append(os.path.abspath("/global/u1/j/jinxch/parallel/Project/cs267-project/examples/opt"))
+from os.path import dirname
 
+opt_path = os.path.join(dirname(dirname(__file__)), "examples/opt")
+sys.path.append(opt_path)
 import opt
 
 
@@ -23,11 +26,11 @@ async def make_requests(num_reqs):
         # target = i // (num_reqs // 2)
         target = i % 2
 
-        logging.info(str(i)+" req time: {}".format(time.time()-start_time))
+        logging.info(str(i) + " req time: {}".format(time.time() - start_time))
 
         resp: opt.OPTResponse = await controller.handle_request(f"opt{target}", req)
 
-        logging.info(str(i)+" response time: {}".format(time.time()-start_time))
+        logging.info(str(i) + " response time: {}".format(time.time() - start_time))
 
         print(f"Response time {i}: {time.time() - start_time}")
         print(resp.output)
@@ -35,9 +38,7 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-
-    logging.basicConfig(filename='logs/worst.log', level=logging.DEBUG)
-
+    logging.basicConfig(filename="logs/worst.log", level=logging.DEBUG)
 
     num_models = 2
     tp_world_size = 1
@@ -49,9 +50,6 @@ if __name__ == "__main__":
     logging.info("Pp world size: {}".format(pp_world_size))
 
     first_port = 29600
-
-
-
     configs = []
     for i in range(num_models):
         config = ModelConfig(
