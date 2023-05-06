@@ -21,12 +21,26 @@ uids=[]
 thrds=[]
 start_time=None
 
-async def get_res(id):
+async def get_res(i):
     # print(id)
     # print("STARTED")
-    output = await engine.wait(uids[id])
-    logging.info(str(id)+" response time: {}".format(time.time()-start_time))
-    print(f"Response time {id}: {time.time() - start_time}")
+
+    inputs = tokenizer("hello world", truncation=True, max_length=512)
+    inputs["max_tokens"] = 1
+    inputs["top_k"] = 50
+    inputs["top_p"] = 0.5
+    inputs["temperature"] = 0.7
+
+    
+
+    uid = id(inputs)
+    logging.info(str(i)+" req time: {}".format(time.time()-start_time))
+    print(f"Request time {i}: {time.time() - start_time}")
+    engine.submit(uid, inputs)
+    
+    output = await engine.wait(uid)
+    logging.info(str(i)+" response time: {}".format(time.time()-start_time))
+    print(f"Response time {i}: {time.time() - start_time}")
     output_seq = tokenizer.decode(output, skip_special_tokens=True)
     print(output_seq)
 
@@ -39,20 +53,6 @@ async def make_requests(num_reqs):
     for i in range(num_reqs):
         task=asyncio.create_task(get_res(i))
         tasks.append(task)
-
-    for i in range(num_reqs):
-        inputs = tokenizer("hello world", truncation=True, max_length=512)
-        inputs["max_tokens"] = 1
-        inputs["top_k"] = 50
-        inputs["top_p"] = 0.5
-        inputs["temperature"] = 0.7
-
-        logging.info(str(i)+" req time: {}".format(time.time()-start_time))
-
-        uid = id(inputs)
-        # print(uid)
-        engine.submit(uid, inputs)
-        uids.append(uid)
 
     logging.info(time.time()-start_time)
     

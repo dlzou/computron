@@ -84,7 +84,7 @@ class Client:
             # self.sock.sendto(data_bytes, (HOST, PORT))
             # response, addr = self.sock.recvfrom(1024)
 
-            print(f"Response status code: {response.decode()}")
+            # print(f"Response status code: {response.decode()}")
 
 
 import asyncio
