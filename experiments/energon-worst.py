@@ -68,7 +68,7 @@ if __name__ == "__main__":
     tp_world_size = 1
     pp_world_size = 2
 
-    logging.info("\nNew run --- ")
+    logging.info("\n --- New run --- ")
     logging.info("Tp world size: {}".format(tp_world_size))
     logging.info("Pp world size: {}".format(pp_world_size))
 
@@ -85,4 +85,4 @@ if __name__ == "__main__":
     )
 
     time.sleep(10)  # Wait for engine to start
-    asyncio.run(make_requests(20))
+    asyncio.run(make_requests(30))

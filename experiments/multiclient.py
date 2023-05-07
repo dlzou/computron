@@ -6,30 +6,64 @@ import os
 import pickle
 import sys
 import queue
+import logging
 
-# print(os.path.abspath(os.path.curdir))
-# sys.path.append(os.path.abspath("."))
-# sys.path.append(os.path.abspath("../cs267-project/alpa"))
-# print(sys.path)
+lock=threading.RLock()
+global_cnt=0
 
-import alpa.alpa_serve.simulator.workload as workload
+from computron import launch_multi_model, ModelConfig
 
+sys.path.append(os.path.abspath("/global/u1/j/jinxch/parallel/Project/cs267-project/examples/opt"))
+import opt
+
+sys.path.append(os.path.abspath("/global/u1/j/jinxch/parallel/Project/cs267-project/alpa"))
+import alpa_serve.simulator.workload as workload
 import socket
 
-HOST = "localhost"
-PORT = 5000
 
 msg_queue = None
 
 
-class Server:
-    def __init__(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((HOST, PORT))
-        self.responseid = 0
+controller = None
+start_time = None
 
-    def bind(self, engine):
-        self.engine = engine
+async def get_res(i,target):
+    print(start_time)
+    print(i)
+
+    req = opt.OPTRequest(max_tokens=1, prompt="hello world")
+    # target = 0
+    # target = i // (num_reqs // 2)
+
+    logging.info(str(i)+" server req time: {}".format(time.time()-start_time))
+
+    try:
+        resp: opt.OPTResponse = await controller.handle_request(f"opt{target}", req)
+    except Exception as e:
+        print(e)
+
+    logging.info(str(i)+" server response time: {}".format(time.time()-start_time))
+
+    print(f"Response time {i}: {time.time() - start_time}")
+    print(resp.output)
+
+# async def make_requests(num_reqs):
+#     global start_time
+#     start_time = time.time()
+
+#     tasks=[]
+#     for i in range(num_reqs):
+#         task=asyncio.create_task(get_res(i))
+#         tasks.append(task)
+
+#     logging.info(time.time()-start_time)
+    
+#     await asyncio.wait(tasks)
+
+#     print(f"Total time: {time.time() - start_time}")
+
+
+def serve():
 
     def monitor(self):
         while True:
@@ -52,7 +86,7 @@ class Server:
 
 
 class Client:
-    def __init__(self, a, b, model_id) -> None:
+    def __init__(self, a, b, model_id, st_id) -> None:
         self.process = workload.GammaProcess(a, b)
         self.url = "localhost:1234"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -61,6 +95,9 @@ class Client:
     def gen(self, st, duration, seed=0):
         self.request_time = self.process.generate_arrivals(st, duration, seed)
         print(self.request_time)
+        logging.info("client {}, req len: {}".format(self.cnt, len(self.request_time)))
+        for i in self.request_time:
+            logging.info(i)
 
     def start(self):
         start_time = 0
@@ -71,7 +108,8 @@ class Client:
             start_time = time_point
             print(delay)
             delay -= time.time() - ctime
-            time.sleep(delay)
+            if delay>0:
+                time.sleep(delay)
             ctime = time.time()
             print("current request time: ", time.time() - ptime)
 
@@ -81,10 +119,17 @@ class Client:
 
             msg_queue.put((self.id, data_bytes))
 
-            # self.sock.sendto(data_bytes, (HOST, PORT))
-            # response, addr = self.sock.recvfrom(1024)
+            global global_cnt
+            
+            msg_queue.put((global_cnt, self.model_id))
 
-            # print(f"Response status code: {response.decode()}")
+            # asyncio.run(get_res(self.cnt,self.model_id))
+            
+            with lock:
+                global_cnt+=1
+
+
+        # msg_queue.put((999,999))
 
 
 import asyncio
@@ -93,19 +138,54 @@ import time
 
 from energonai import launch_engine
 import torch
-import examples.mlp.mlp as mlp
+import random
 
 if __name__ == "__main__":
-    tp_world_size = 2
-    pp_world_size = 1
 
-    engine = launch_engine(
+    logging.basicConfig(filename='logs/gamma.log', level=logging.DEBUG)
+
+
+    num_models = 2
+    tp_world_size = 1
+    pp_world_size = 2
+
+    logging.info("\nNew run --- ")
+    logging.info("Num models:{}".format(num_models))
+    logging.info("Tp world size: {}".format(tp_world_size))
+    logging.info("Pp world size: {}".format(pp_world_size))
+
+    first_port = 29600
+
+
+
+    configs = []
+    for i in range(num_models):
+        config = ModelConfig(
+            model_id=f"opt{i}",
+            master_host="localhost",
+            master_port=(first_port + 3 * i),
+            rpc_port=(first_port + 3 * i + 1),
+            request_port=(first_port + 3 * i + 2),
+            request_type=opt.OPTRequest,
+            unpack_request_fn=opt.unpack_request,
+            pack_response_fn=opt.pack_response,
+            model_fn=opt.opt_1B,
+            batch_manager=opt.OPTBatchManager(
+                max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
+            ),
+        )
+        configs.append(config)
+
+    controller = launch_multi_model(
+        configs,
         tp_world_size=tp_world_size,
         pp_world_size=pp_world_size,
-        master_host="localhost",
-        master_port=29600,
-        rpc_port=29601,
-        model_fn=partial(mlp.MLP, dim=256),
+        n_nodes=1,
+        node_rank=0,
+        controller_kwargs={
+            "max_loaded": 1,
+        },
+        # log_dir="logs",
     )
 
     time.sleep(15)  # Wait for engine to start
@@ -117,18 +197,22 @@ if __name__ == "__main__":
     clients.append(Client(1, 2, 2))
     # client = Client(1, 2, 1)
     for i in range(len(clients)):
-        clients[i].gen(0, 10)
+        clients[i].gen(0, 10, seed=random.randint(0,32767))
 
-    server = Server()
-    server.bind(engine)
+    start_time=time.time()
+    print("1234214",start_time)
 
     client_threads = [None] * 2
     for i in range(len(clients)):
-        client_threads[i] = threading.Thread(target=clients[i].start)
+        threads.append(threading.Thread(target=clients[i].start))
+    threads.append(threading.Thread(target=serve))
 
-    server_thread = threading.Thread(target=server.monitor)
+    for i in range(len(threads)):
+        threads[i].start()
 
-    server_thread.start()
+    for i in range(len(threads)):
+        threads[i].join()
 
-    for i in range(len(client_threads)):
-        client_threads[i].start()
+
+    
+

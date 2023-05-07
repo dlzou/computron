@@ -23,7 +23,7 @@ async def get_res(i):
     req = opt.OPTRequest(max_tokens=1, prompt="hello world")
     # target = 0
     # target = i // (num_reqs // 2)
-    target = i % 2
+    target = 0
 
     logging.info(str(i) + " req time: {}".format(time.time() - start_time))
 
@@ -39,7 +39,11 @@ async def make_requests(num_reqs):
     global start_time
     start_time = time.time()
 
+<<<<<<< HEAD
     tasks = []
+=======
+    tasks=[]
+>>>>>>> 719235f (update)
     for i in range(num_reqs):
         task = asyncio.create_task(get_res(i))
         tasks.append(task)
@@ -52,13 +56,19 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     logging.basicConfig(filename="logs/worst-temp.log", level=logging.DEBUG)
+=======
 
-    num_models = 2
+    logging.basicConfig(filename='logs/worst.log', level=logging.DEBUG)
+
+>>>>>>> 719235f (update)
+
+    num_models = 1
     tp_world_size = 1
     pp_world_size = 2
 
-    logging.info("New run --- ")
+    logging.info("\nNew run --- ")
     logging.info("Num models:{}".format(num_models))
     logging.info("Num models:{}".format(num_models))
     logging.info("Tp world size: {}".format(tp_world_size))
@@ -76,7 +86,7 @@ if __name__ == "__main__":
             request_type=opt.OPTRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
-            model_fn=opt.opt_1B,
+            model_fn=opt.opt_6B,
             batch_manager=opt.OPTBatchManager(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
@@ -95,4 +105,4 @@ if __name__ == "__main__":
         # log_dir="logs",
     )
 
-    asyncio.run(make_requests(20))
+    asyncio.run(make_requests(30))
