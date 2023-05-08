@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import asyncio
+import time
 from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
@@ -93,16 +94,20 @@ class LRUController(Controller):
         await in_writer.wait_closed()
 
     async def handle_request(self, model_id: str, req: BaseModel):
+        timers = {}
+        timers["start"] = time.time()
         async with self.request_lock:
             if not self.loaded[model_id]:
                 await self._swap_in(model_id)
             else:
                 self.evict_queue.remove(model_id)
                 self.evict_queue.append(model_id)
+            timers["load"] = time.time()
             reader, writer = await asyncio.open_connection(*self.engines[model_id])
             await send_obj(writer, req)
 
         resp = await recv_obj(reader)
         writer.close()
         await writer.wait_closed()
-        return resp
+        timers["model"] = time.time()
+        return resp, timers
