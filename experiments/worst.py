@@ -39,11 +39,7 @@ async def make_requests(num_reqs):
     global start_time
     start_time = time.time()
 
-<<<<<<< HEAD
     tasks = []
-=======
-    tasks=[]
->>>>>>> 719235f (update)
     for i in range(num_reqs):
         task = asyncio.create_task(get_res(i))
         tasks.append(task)
@@ -56,13 +52,9 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    logging.basicConfig(filename="logs/worst-temp.log", level=logging.DEBUG)
-=======
 
     logging.basicConfig(filename='logs/worst.log', level=logging.DEBUG)
 
->>>>>>> 719235f (update)
 
     num_models = 1
     tp_world_size = 1
