@@ -27,66 +27,73 @@ msg_queue = None
 controller = None
 start_time = None
 
-async def get_res(i,target):
-    print(start_time)
-    print(i)
+# async def get_res(i,target):
+#     print(start_time)
+#     print(i)
 
-    req = opt.OPTRequest(max_tokens=1, prompt="hello world")
-    # target = 0
-    # target = i // (num_reqs // 2)
+#     req = opt.OPTRequest(max_tokens=1, prompt="hello world")
+#     # target = 0
+#     # target = i // (num_reqs // 2)
 
-    logging.info(str(i)+" server req time: {}".format(time.time()-start_time))
+#     logging.info(str(i)+" server req time: {}".format(time.time()-start_time))
 
-    try:
-        resp: opt.OPTResponse = await controller.handle_request(f"opt{target}", req)
-    except Exception as e:
-        print(e)
+#     try:
+#         task=asyncio.create_task(controller.handle_request(f"opt{target}", req))
+#         resp: opt.OPTResponse = await task
+#     except Exception as e:
+#         print(e)
 
-    logging.info(str(i)+" server response time: {}".format(time.time()-start_time))
+#     logging.info(str(i)+" server response time: {}".format(time.time()-start_time))
 
-    print(f"Response time {i}: {time.time() - start_time}")
-    print(resp.output)
+#     print(f"Response time {i}: {time.time() - start_time}")
+#     print(resp.output)
 
-# async def make_requests(num_reqs):
-#     global start_time
-#     start_time = time.time()
+async def worker():
+    while True:
+        if not msg_queue.empty():
+            req_id, model_id = msg_queue.get()
+            print(req_id,model_id)
+            req = opt.OPTRequest(max_tokens=1, prompt="hello world")
+            # target = 0
+            # target = i // (num_reqs // 2)
 
+            logging.info(str(i)+" server req time: {}".format(time.time()-start_time))
+
+            try:
+                task=asyncio.create_task(controller.handle_request(f"opt{model_id}", req))
+                resp: opt.OPTResponse = await task
+            except Exception as e:
+                print(e)
+
+            logging.info(str(i)+" server response time: {}".format(time.time()-start_time))
+
+            print(f"Response time {i}: {time.time() - start_time}")
+            print(resp.output)
+
+
+async def worker_init():
+    workers=[]
+    for i in range(2):
+        worker_=asyncio.create_task(worker())
+        workers.append(worker_)
+
+# def serve():
+#     # print("Hi")
 #     tasks=[]
-#     for i in range(num_reqs):
-#         task=asyncio.create_task(get_res(i))
-#         tasks.append(task)
-
-#     logging.info(time.time()-start_time)
-    
-#     await asyncio.wait(tasks)
-
-#     print(f"Total time: {time.time() - start_time}")
+#     while True:
+#         # data_bytes, addr = self.sock.recvfrom(10240)
+#         while not msg_queue.empty():
+#             req_id, model_id = msg_queue.get()
+            
+#             thread=threading.Thread(target=get_res, args=(req_id,model_id,))
+#             thread.start()
 
 
-def serve():
-
-    def monitor(self):
-        while True:
-            # data_bytes, addr = self.sock.recvfrom(10240)
-            if msg_queue.empty():
-                continue
-            sender_id, data_bytes = msg_queue.get()
-            data = pickle.loads(data_bytes)
-            print("Received from {}: {}".format(sender_id, data))
-
-            # self.sock.sendto(b"Received", addr)
-
-            # AWAIT?
-
-            print("Response id: ", self.responseid)
-            self.responseid += 1
-            uid = id(data)
-            self.engine.submit(uid, data)
-            print("Submmitted: ", uid)
+        
 
 
 class Client:
-    def __init__(self, a, b, model_id, st_id) -> None:
+    def __init__(self, a, b, model_id) -> None:
         self.process = workload.GammaProcess(a, b)
         self.url = "localhost:1234"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -95,7 +102,7 @@ class Client:
     def gen(self, st, duration, seed=0):
         self.request_time = self.process.generate_arrivals(st, duration, seed)
         print(self.request_time)
-        logging.info("client {}, req len: {}".format(self.cnt, len(self.request_time)))
+        logging.info("client {}, req len: {}".format(self.model_id, len(self.request_time)))
         for i in self.request_time:
             logging.info(i)
 
@@ -114,10 +121,10 @@ class Client:
             print("current request time: ", time.time() - ptime)
 
             #  send from client to server (a request)
-            data = torch.ones((256,))
-            data_bytes = pickle.dumps(data)
+            # data = torch.ones((256,))
+            # data_bytes = pickle.dumps(data)
 
-            msg_queue.put((self.id, data_bytes))
+            # msg_queue.put((self.id, data_bytes))
 
             global global_cnt
             
@@ -142,7 +149,7 @@ import random
 
 if __name__ == "__main__":
 
-    logging.basicConfig(filename='logs/gamma.log', level=logging.DEBUG)
+    logging.basicConfig(filename='logs/gamma.log',filemode='w' ,level=logging.DEBUG)
 
 
     num_models = 2
@@ -193,8 +200,8 @@ if __name__ == "__main__":
     msg_queue = queue.Queue()
 
     clients = []
+    clients.append(Client(1, 2, 0))
     clients.append(Client(1, 2, 1))
-    clients.append(Client(1, 2, 2))
     # client = Client(1, 2, 1)
     for i in range(len(clients)):
         clients[i].gen(0, 10, seed=random.randint(0,32767))
@@ -202,14 +209,18 @@ if __name__ == "__main__":
     start_time=time.time()
     print("1234214",start_time)
 
-    client_threads = [None] * 2
+    threads = [None] * 2
     for i in range(len(clients)):
-        threads.append(threading.Thread(target=clients[i].start))
-    threads.append(threading.Thread(target=serve))
+        threads[i]=(threading.Thread(target=clients[i].start))
+
+    # threads.append(threading.Thread(target=serve))
 
     for i in range(len(threads)):
         threads[i].start()
 
+    asyncio.run(worker_init())    
+
+    
     for i in range(len(threads)):
         threads[i].join()
 

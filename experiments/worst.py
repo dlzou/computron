@@ -52,9 +52,7 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-
-    logging.basicConfig(filename='logs/worst.log', level=logging.DEBUG)
-
+    logging.basicConfig(filename="logs/worst-temp.log", level=logging.DEBUG)
 
     num_models = 1
     tp_world_size = 1

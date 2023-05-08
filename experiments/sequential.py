@@ -38,13 +38,7 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-<<<<<<<< HEAD:experiments/worst_copy.py
-    logging.basicConfig(filename="logs/worst.log", level=logging.DEBUG)
-========
-
     logging.basicConfig(filename='logs/worst-seq.log', level=logging.DEBUG)
-
->>>>>>>> 719235f (update):experiments/sequential.py
 
     num_models = 2
     tp_world_size = 2
