@@ -13,10 +13,13 @@ global_cnt=0
 
 from computron import launch_multi_model, ModelConfig
 
-sys.path.append(os.path.abspath("/global/u1/j/jinxch/parallel/Project/cs267-project/examples/opt"))
+from os.path import dirname
+opt_path = os.path.join(dirname(dirname(__file__)), "examples/opt")
+sys.path.append(opt_path)
 import opt
 
-sys.path.append(os.path.abspath("/global/u1/j/jinxch/parallel/Project/cs267-project/alpa"))
+opt_path = os.path.join(dirname(dirname(__file__)), "alpa")
+sys.path.append(opt_path)
 import alpa_serve.simulator.workload as workload
 import socket
 
@@ -61,7 +64,8 @@ async def worker():
 
             try:
                 task=asyncio.create_task(controller.handle_request(f"opt{model_id}", req))
-                resp: opt.OPTResponse = await task
+                resp: opt.OPTResponse = await asyncio.gather(task)
+                # resp: opt.OPTResponse = await (task)
             except Exception as e:
                 print(e)
 
