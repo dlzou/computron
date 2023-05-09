@@ -1,0 +1,8 @@
+#!/bin/bash
+#SBATCH --account=mp309
+#SBATCH -N 1
+#SBATCH -C gpu
+#SBATCH -t 00:30:00
+
+conda activate 267-10
+python multiclient.py
