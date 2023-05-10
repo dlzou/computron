@@ -24,7 +24,7 @@ async def make_requests(num_reqs):
         req = opt.OPTRequest(max_tokens=1, prompt="hello world")
         # target = 0
         # target = i // (num_reqs // 2)
-        target = i % 2
+        target = 0
 
         logging.info(str(i) + " req time: {}".format(time.time() - start_time))
 
@@ -38,11 +38,11 @@ async def make_requests(num_reqs):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(filename='logs/worst-seq.log', level=logging.DEBUG)
+    logging.basicConfig(filename='logs/seq-baseline.log',filemode='w', level=logging.DEBUG)
 
-    num_models = 2
-    tp_world_size = 2
-    pp_world_size = 2
+    num_models = 1
+    tp_world_size = 1
+    pp_world_size = 1
 
     logging.info("New run --- ")
     logging.info("Num models:{}".format(num_models))
@@ -61,7 +61,7 @@ if __name__ == "__main__":
             request_type=opt.OPTRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
-            model_fn=opt.opt_6B,
+            model_fn=opt.opt_13B,
             batch_manager=opt.OPTBatchManager(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
@@ -80,4 +80,4 @@ if __name__ == "__main__":
         # log_dir="logs",
     )
 
-    asyncio.run(make_requests(20))
+    asyncio.run(make_requests(3000))
