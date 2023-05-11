@@ -32,8 +32,8 @@ async def make_requests(num_models, num_requests):
 
         resp, timers = await controller.handle_request(f"opt{target}", req)
         
-        logging.info(f"{i} load time: {timers['load'] - timers['start']}")
-        logging.info(f"{i} model time: {timers['model'] - timers['load']}")
+        logging.info(f"{i} load time: {timers['load']}")
+        logging.info(f"{i} model time: {timers['model']}")
         logging.info(f"{i} response time: {time.time() - request_time}")
 
         print(f"Response time {i}: {time.time() - request_time}")
