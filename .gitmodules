@@ -5,4 +5,4 @@
 
 [submodule "alpa"]
 	path = alpa
-	url = git@github.com:dlzou/mms.git
+	url = git@github.com:dlzou/alpa-serve.git

@@ -71,7 +71,7 @@ class OffloadingWorker:
         else:
             self.model: nn.Module = model_fn(**model_kwargs)
         self.model.eval()
-        self.model.to("cpu")
+        self.model.to("cpu", non_blocking=True)
         torch.cuda.empty_cache()
 
         self.rpc_name = f"worker{self.global_rank}"

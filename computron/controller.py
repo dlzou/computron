@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import asyncio
+import time
 from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
@@ -16,7 +17,7 @@ Ideas for more controllers with more sophisticated offloading and scheduling str
 """
 
 
-class Controller:
+class Controller(ABC):
     """Dispatch requests to the target model, performing offloading as needed."""
 
     @abstractmethod
@@ -93,16 +94,21 @@ class LRUController(Controller):
         await in_writer.wait_closed()
 
     async def handle_request(self, model_id: str, req: BaseModel):
+        timers = {}
         async with self.request_lock:
+            start_load = time.time()
             if not self.loaded[model_id]:
                 await self._swap_in(model_id)
             else:
                 self.evict_queue.remove(model_id)
                 self.evict_queue.append(model_id)
+            timers["load"] = time.time() - start_load
             reader, writer = await asyncio.open_connection(*self.engines[model_id])
+            start_model = time.time()
             await send_obj(writer, req)
 
         resp = await recv_obj(reader)
+        timers["model"] = time.time() - start_model
         writer.close()
         await writer.wait_closed()
-        return resp
+        return resp, timers

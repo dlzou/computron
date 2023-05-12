@@ -3,7 +3,7 @@ from typing import List, Deque, Tuple, Hashable, Any, Union, Optional
 from colossalai.logging import get_dist_logger
 from computron import LoadEntry, OffloadingBatchManager
 from energonai import BatchManager, SubmitEntry, TaskEntry
-from energonai.model import opt_125M, opt_1B, opt_6B, opt_30B, opt_175B
+from energonai.model import opt_125M, opt_1B, opt_6B, opt_13B, opt_30B, opt_175B
 from pydantic import BaseModel, Field
 import torch
 from transformers import GPT2Tokenizer
@@ -15,9 +15,10 @@ tokenizer = GPT2Tokenizer.from_pretrained("facebook/opt-30b")
 
 def get_model_fn(model_name: str):
     model_map = {
-        "opt-125m": opt_125M,  # (checkpoint='/data/yusun/xueyang/checkpoints/cs267/reshard-model_part-0.pt'),
+        "opt-125m": opt_125M,
         "opt-1.3b": opt_1B,
         "opt-6.7b": opt_6B,
+        "opt-13b": opt_13B,
         "opt-30b": opt_30B,
         "opt-175b": opt_175B,
     }

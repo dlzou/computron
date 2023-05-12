@@ -6,10 +6,10 @@ import os
 import pickle
 import sys
 
-print(os.path.abspath(os.path.curdir))
-sys.path.append(os.path.abspath("."))
-sys.path.append(os.path.abspath("../cs267-project/alpa"))
-print(sys.path)
+# print(os.path.abspath(os.path.curdir))
+# sys.path.append(os.path.abspath("."))
+# sys.path.append(os.path.abspath("../cs267-project/alpa"))
+# print(sys.path)
 
 import alpa.alpa_serve.simulator.workload as workload
 
@@ -28,7 +28,7 @@ class Server:
     def bind(self, engine):
         self.engine = engine
 
-    def monitor(self):
+    async def monitor(self):
         while True:
             data_bytes, addr = self.sock.recvfrom(10240)
             data = pickle.loads(data_bytes)
@@ -79,7 +79,7 @@ import time
 
 from energonai import launch_engine
 import torch
-import src.models.mlp as mlp
+import examples.mlp.mlp as mlp
 
 if __name__ == "__main__":
     tp_world_size = 2
