@@ -73,7 +73,7 @@ class LRUController(Controller):
         if swap_out:
             out_model_id = self.evict_queue.pop(0)
             out_reader, out_writer = await asyncio.open_connection(*self.engines[out_model_id])
-            load_req = LoadRequest(load=False, flush=True)
+            load_req = LoadRequest(load=False, blocking=True)
             await send_obj(out_writer, load_req)
             load_resp: LoadResponse = await recv_obj(out_reader)
             assert load_resp.success
@@ -81,7 +81,7 @@ class LRUController(Controller):
             out_writer.close()
 
         in_reader, in_writer = await asyncio.open_connection(*self.engines[in_model_id])
-        load_req = LoadRequest(load=True, flush=False)
+        load_req = LoadRequest(load=True, blocking=True)
         await send_obj(in_writer, load_req)
         load_resp: LoadResponse = await recv_obj(in_reader)
         assert load_resp.success

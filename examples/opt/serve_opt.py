@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import time
 
@@ -15,20 +16,26 @@ async def make_requests(num_reqs):
         # target = 0
         # target = i // (num_reqs // 2)
         target = i % 2
-        resp: opt.OPTResponse = await controller.handle_request(f"opt{target}", req)
-        print(f"Response time {i}: {time.time() - start_time}")
+        req_time = time.time()
+        resp, _ = await controller.handle_request(f"opt{target}", req)
+        print(f"Response time {i}: {time.time() - req_time}")
         print(resp.output)
     print(f"Total time: {time.time() - start_time}")
 
 
 if __name__ == "__main__":
-    num_models = 2
-    tp_world_size = 2
-    pp_world_size = 1
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--model-name", default="opt-1.3b")
+    parser.add_argument("-n", "--num-models", type=int, default=2)
+    parser.add_argument("-t", "--tp-world-size", type=int, default=1)
+    parser.add_argument("-p", "--pp-world-size", type=int, default=1)
+    parser.add_argument("-r", "--num-requests", type=int, default=12)
+    args = parser.parse_args()
+    print(args)
+    
     first_port = 29600
-
     configs = []
-    for i in range(num_models):
+    for i in range(args.num_models):
         config = ModelConfig(
             model_id=f"opt{i}",
             master_host="localhost",
@@ -38,8 +45,8 @@ if __name__ == "__main__":
             request_type=opt.OPTRequest,
             unpack_request_fn=opt.unpack_request,
             pack_response_fn=opt.pack_response,
-            model_fn=opt.opt_6B,
-            batch_manager=opt.OPTBatchManager(
+            model_fn=opt.get_model_fn(args.model_name),
+            batch_manager=opt.BatchManagerForGeneration(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
         )
@@ -47,8 +54,8 @@ if __name__ == "__main__":
 
     controller = launch_multi_model(
         configs,
-        tp_world_size=tp_world_size,
-        pp_world_size=pp_world_size,
+        tp_world_size=args.tp_world_size,
+        pp_world_size=args.pp_world_size,
         n_nodes=1,
         node_rank=0,
         controller_kwargs={
@@ -57,4 +64,4 @@ if __name__ == "__main__":
         # log_dir="logs",
     )
 
-    asyncio.run(make_requests(10))
+    asyncio.run(make_requests(args.num_requests))

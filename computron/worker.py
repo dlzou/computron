@@ -17,7 +17,7 @@ import torch.nn as nn
 from computron.messages import LoadEntry
 
 
-class OffloadingWorker:
+class Worker:
     def __init__(
         self,
         rank: int,
@@ -141,13 +141,14 @@ class OffloadingWorker:
                             outputs = self._forward(entry.batch)
                         self.output_pipe.send(TaskEntry(entry.uids, outputs))
                     elif isinstance(entry, LoadEntry):
+                        self.output_pipe.send(entry)
                         with torch.inference_mode():
                             if entry.load:
                                 self.model.to("cuda", non_blocking=True)
                             else:
                                 self.model.to("cpu", non_blocking=True)
                                 torch.cuda.empty_cache()
-                        self.output_pipe.send(entry)
+                        self.to_master_pipe.send(entry)
                 except RuntimeError:
                     time.sleep(0.01)
 

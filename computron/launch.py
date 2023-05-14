@@ -8,8 +8,8 @@ from pydantic import BaseModel
 import torch.multiprocessing as mp
 
 from computron.controller import Controller, LRUController
-from computron.engine import OffloadingEngine
-from computron.worker import OffloadingWorker
+from computron.engine import Engine
+from computron.worker import Worker
 
 
 @dataclass
@@ -55,10 +55,10 @@ def _launch_offloading_workers(
     for i in range(n_proc_per_node):
         rank = n_proc_per_node * node_rank + i
         if log_dir is None:
-            target = OffloadingWorker
+            target = Worker
         else:
             log_file = os.path.join(log_dir, f"{config.model_id}_w{i}.log")
-            target = LogWrapper(OffloadingWorker, log_file)
+            target = LogWrapper(Worker, log_file)
         p = ctx.Process(
             target=target,
             args=(
@@ -120,10 +120,10 @@ def launch_multi_model(
         )
         if node_rank == 0:
             if log_dir is None:
-                target = OffloadingEngine
+                target = Engine
             else:
                 log_file = os.path.join(log_dir, f"{config.model_id}.log")
-                target = LogWrapper(OffloadingEngine, log_file)
+                target = LogWrapper(Engine, log_file)
             p = ctx.Process(
                 target=target,
                 args=(

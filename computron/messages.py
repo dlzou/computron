@@ -14,7 +14,7 @@ class PingResponse(BaseModel):
 
 class LoadRequest(BaseModel):
     load: bool
-    flush: bool
+    blocking: bool
 
 
 class LoadResponse(BaseModel):
@@ -25,4 +25,4 @@ class LoadResponse(BaseModel):
 class LoadEntry:
     uid: Hashable
     load: bool
-    flush: bool
+    blocking: bool
