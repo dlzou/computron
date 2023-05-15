@@ -13,21 +13,26 @@ from computron.worker import Worker
 
 
 @dataclass
-class ModelConfig:
-    model_id: str
+class EngineConfig:
     master_host: str
     master_port: int
     rpc_port: int
-    request_port: int
+    # num_engines: int
+    # engine_ports: List[int]
+    engine_port: int
+    pipe_size: int = 1
+    queue_size: int = 0
+    rpc_disable_shm: bool = True
+
+
+@dataclass
+class ModelConfig:
+    model_id: str
     request_type: BaseModel
     unpack_request_fn: Callable[[BaseModel], SubmitEntry]
     pack_response_fn: Callable[[Any], BaseModel]
     model_fn: Callable
-    pipelinable: bool = False
     batch_manager: Optional[BatchManager] = None
-    pipe_size: int = 1
-    queue_size: int = 0
-    rpc_disable_shm: bool = True
     model_kwargs: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -42,8 +47,8 @@ class LogWrapper:
             self.task(*args, **kwargs)
 
 
-def _launch_offloading_workers(
-    config: ModelConfig,
+def _launch_workers(
+    model_config: ModelConfig,
     tp_world_size: int,
     pp_world_size: int,
     n_proc_per_node: int = 1,
@@ -57,7 +62,7 @@ def _launch_offloading_workers(
         if log_dir is None:
             target = Worker
         else:
-            log_file = os.path.join(log_dir, f"{config.model_id}_w{i}.log")
+            log_file = os.path.join(log_dir, f"{model_config.model_id}_w{i}.log")
             target = LogWrapper(Worker, log_file)
         p = ctx.Process(
             target=target,
@@ -65,16 +70,16 @@ def _launch_offloading_workers(
                 rank,
                 tp_world_size,
                 pp_world_size,
-                config.master_host,
-                config.master_port,
-                config.rpc_port,
+                model_config.master_host,
+                model_config.master_port,
+                model_config.rpc_port,
                 n_proc_per_node,
-                config.model_fn,
-                config.pipelinable,
-                config.pipe_size,
-                config.rpc_disable_shm,
+                model_config.model_fn,
+                model_config.pipelinable,
+                model_config.pipe_size,
+                model_config.rpc_disable_shm,
             ),
-            kwargs=config.model_kwargs,
+            kwargs=model_config.model_kwargs,
         )
         procs.append(p)
         p.start()
@@ -85,7 +90,8 @@ _controllers = {
 }
 
 
-def launch_multi_model(
+def launch_computron(
+    engine_config: EngineConfig,
     model_configs: List[ModelConfig],
     tp_world_size: int,
     pp_world_size: int,
@@ -110,7 +116,7 @@ def launch_multi_model(
 
     for i in range(num_models):
         config = model_configs[i]
-        _launch_offloading_workers(
+        _launch_workers(
             config,
             tp_world_size,
             pp_world_size,

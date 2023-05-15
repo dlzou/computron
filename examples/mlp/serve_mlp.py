@@ -2,7 +2,7 @@ import asyncio
 from functools import partial
 import time
 
-from computron import launch_multi_model, ModelConfig
+from computron import launch_computron, ModelConfig
 import torch
 
 import mlp
@@ -47,7 +47,7 @@ if __name__ == "__main__":
         )
         configs.append(config)
 
-    ctlr = launch_multi_model(
+    ctlr = launch_computron(
         configs,
         tp_world_size=tp_world_size,
         pp_world_size=pp_world_size,

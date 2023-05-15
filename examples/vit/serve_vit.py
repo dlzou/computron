@@ -2,7 +2,7 @@ import asyncio
 import os
 import time
 
-from computron import launch_multi_model, ModelConfig
+from computron import launch_computron, ModelConfig
 
 from proc_img import proc_img
 import vit
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         )
         configs.append(config)
 
-    controller = launch_multi_model(
+    controller = launch_computron(
         configs,
         tp_world_size=tp_world_size,
         pp_world_size=pp_world_size,
