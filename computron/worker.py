@@ -1,32 +1,37 @@
-import time
 from contextlib import contextmanager
-from typing import Any, Callable, List
+from queue import Queue
+import threading
+import time
 
 import colossalai
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.logging import disable_existing_loggers, get_dist_logger
-# from colossalai.pipeline.pipelinable import PipelinableContext
+from colossalai.pipeline.pipelinable import PipelinableContext
 from energonai.pipe import Pipe
-from energonai.task import TaskEntry
 from energonai.utils import build_device_maps, Terminator
 import torch
 import torch.distributed.rpc as trpc
 import torch.nn as nn
 
 from computron.launch import EngineConfig, ModelConfig
-from computron.messages import LoadEntry
+from computron.messages import LoadEntry, TaskEntry
 
 
 class Worker:
+    """
+    Adapted from https://github.com/hpcaitech/EnergonAI/blob/main/energonai/worker.py
+    with significant chagnes.
+    """
+
     def __init__(
         self,
+        engine_config: EngineConfig,
+        model_configs: list[ModelConfig],
         rank: int,
         tp_world_size: int,
         pp_world_size: int,
         n_proc_per_node: int,
-        engine_config: EngineConfig,
-        model_configs: List[ModelConfig],
     ):
         self.global_rank = rank
         self.world_size = tp_world_size * pp_world_size
@@ -51,30 +56,25 @@ class Worker:
             if gpc.is_initialized(ParallelMode.PIPELINE)
             else 0
         )
-
-        # if pipelinable:
-        #     pctx = PipelinableContext()
-        #     with pctx:
-        #         self.model = model_fn(**model_kwargs)
-        #     pctx.to_layer_list()
-        #     pctx.policy = "uniform"
-        #     self.model: nn.Module = pctx.partition(
-        #         num_chunks=1,
-        #         pipeline_size=pp_world_size,
-        #         rank=self.pp_rank,
-        #     )
-        # else:
-        #     self.model: nn.Module = model_fn(**model_kwargs)
-        # self.model.eval()
-        # self.model.to("cpu", non_blocking=True)
-        # # self.model._apply(lambda t: t.pin_memory())
-        # torch.cuda.empty_cache()
-
         self.models = {}
         for mc in model_configs:
-            self.models[mc.model_id] = mc.model_fn(**mc.model_kwargs)
-            self.models[mc.model_id].eval()
-            self.models[mc.model_id].cpu().pin_memory()
+            m = mc.model_id
+            if mc.pipelinable:
+                pctx = PipelinableContext()
+                with pctx:
+                    _ = mc.model_fn(**mc.model_kwargs)
+                pctx.to_layer_list()
+                pctx.policy = "uniform"
+                self.models[m] = pctx.partition(
+                    num_chunks=1,
+                    pipeline_size=pp_world_size,
+                    rank=self.pp_rank,
+                )
+            else:
+                self.models[m] = mc.model_fn(**mc.model_kwargs)
+            self.models[m].eval()
+            # self.models[m].to("cpu", non_blocking=True)
+            # self.models[m]._apply(lambda t: t.cpu().pin_memory())
 
         self.rpc_name = f"worker{self.global_rank}"
         rpc_options = {}
@@ -121,12 +121,21 @@ class Worker:
                 max_size=engine_config.pipe_size,
             )
         
-        self.model_stream = torch.cuda.default_stream()
+        self.compute_stream = torch.cuda.default_stream()
         self.load_stream = torch.cuda.Stream()
+        self.offload_stream = torch.cuda.Stream()
+        self.wait_load_queue = Queue()
+        self.wait_offload_queue = Queue()
+
+        self.wait_load_thread = threading.Thread(target=self._wait_load_fn)
+        self.wait_load_thread.daemon = True
+        self.wait_offload_thread = threading.Thread(target=self._wait_offload_fn)
+        self.wait_offload_thread.daemon = True
+        self.wait_load_thread.start()
+        self.wait_offload_thread.start()
 
         self.logger = get_dist_logger("computron")
-        self.logger.info(f"{self.rpc_name} start")
-        self.logger.info(f"{self.rpc_name} dtype: {next(self.model.parameters()).dtype}")
+        self.logger.info(f"{self.rpc_name} started")
         self._start()
 
     @contextmanager
@@ -143,21 +152,24 @@ class Worker:
                     entry = self.input_pipe.recv_nowait()
                     if isinstance(entry, TaskEntry):
                         with torch.inference_mode():
-                            self.logger.info(f"worker loaded={next(self.model.parameters()).is_cuda}")
-                            self.logger.info(f"worker allocated={torch.cuda.memory_allocated() / (10 ** 9)}")
-                            outputs = self._forward(entry.batch)
-                        self.output_pipe.send(TaskEntry(entry.uids, outputs))
+                            outputs = self._forward(entry.model_id, entry.batch)
+                        self.output_pipe.send(TaskEntry(entry.uids, entry.model_id, outputs))
                     elif isinstance(entry, LoadEntry):
-                        self.output_pipe.send(entry)
+                        if self.pp_rank < (self.pp_world_size - 1):
+                            self.output_pipe.send(entry)
                         with torch.inference_mode():
                             if entry.load:
-                                self.model.to("cuda", non_blocking=True)
-                                # self.model._apply(lambda t: t.cuda())
+                                with torch.cuda.stream(self.load_stream):
+                                    self.models[entry.model_id].to("cuda", non_blocking=True)
+                                    # self.models[entry.model_id]._apply(lambda t: t.cuda())
+                                event = self.load_stream.record_event()
+                                self.wait_load_queue.put((entry, event))
                             else:
-                                self.model.to("cpu", non_blocking=True)
-                                # self.model._apply(lambda t: t.pin_memory())
-                                torch.cuda.empty_cache()
-                        self.to_master_pipe.send(entry)
+                                with torch.cuda.stream(self.offload_stream):
+                                    self.models[entry.model_id].to("cpu", non_blocking=True)
+                                    # self.models[entry.model_id]._apply(lambda t: t.pin_memory())
+                                event = self.offload_stream.record_event()
+                                self.wait_offload_queue.put((entry, event))
                 except RuntimeError:
                     time.sleep(0.01)
 
@@ -166,14 +178,29 @@ class Worker:
         trpc.rpc_sync("master", Terminator.terminate)
         trpc.shutdown()
 
-    def _forward(self, inputs: Any) -> Any:
+    def _forward(self, model_id: str, inputs: object) -> object:
         if isinstance(inputs, (tuple, list)):
-            outputs = self.model(*inputs)
+            outputs = self.models[model_id](*inputs)
         elif isinstance(inputs, dict):
-            outputs = self.model(**inputs)
+            outputs = self.models[model_id](**inputs)
         else:
-            outputs = self.model(inputs)
+            outputs = self.models[model_id](inputs)
         return outputs
 
-    def _load_thread(self):
-        pass
+    def _wait_load_fn(self):
+        while True:
+            if not self.wait_load_queue.empty():
+                entry, load_event = self.wait_load_queue.get_nowait()
+                load_event.synchronize()
+                self.to_master_pipe.send(entry)
+            else:
+                time.sleep(0.05)
+
+    def _wait_offload_fn(self):
+        while True:
+            if not self.wait_offload_queue.empty():
+                entry, load_event = self.wait_offload_queue.get_nowait()
+                load_event.synchronize()
+                self.to_master_pipe.send(entry)
+            else:
+                time.sleep(0.05)

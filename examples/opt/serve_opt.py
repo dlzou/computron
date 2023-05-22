@@ -2,25 +2,38 @@ import argparse
 import asyncio
 import time
 
-from computron import launch_computron, ModelConfig
+from computron import EngineConfig, launch_computron, ModelConfig
 import opt
 
 
-controller = None
+engine = None
 
 
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        req = opt.OPTRequest(max_tokens=1, prompt="hello world")
+        data = opt.tokenizer("hello world", truncation=True, max_length=512)
+        data["max_tokens"] = 1
+        data["top_k"] = 50
+        data["top_p"] = 0.5
+        data["temperature"] = 0.7
         # target = 0
         # target = i // (num_reqs // 2)
         target = i % 2
+        print(f"Making request {i}")
         req_time = time.time()
-        resp, _ = await controller.handle_request(f"opt{target}", req)
+        output = await engine.submit(f"opt{target}", data)
         print(f"Response time {i}: {time.time() - req_time}")
-        print(resp.output)
+        output = opt.tokenizer.decode(output, skip_special_tokens=True)
+        print(output)
     print(f"Total time: {time.time() - start_time}")
+
+
+async def start(args):
+    engine_task = asyncio.create_task(engine.run())
+    request_task = asyncio.create_task(make_requests(args.num_requests))
+    await asyncio.gather(engine_task, request_task)
+    await engine.shutdown()
 
 
 if __name__ == "__main__":
@@ -33,35 +46,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     
-    first_port = 29600
-    configs = []
+    engine_config = EngineConfig(
+        master_host="localhost",
+        master_port=29600,
+        rpc_port=29601,
+        max_loaded=1,
+    )
+    model_configs = []
     for i in range(args.num_models):
-        config = ModelConfig(
+        mc = ModelConfig(
             model_id=f"opt{i}",
-            master_host="localhost",
-            master_port=(first_port + 3 * i),
-            rpc_port=(first_port + 3 * i + 1),
-            request_port=(first_port + 3 * i + 2),
-            request_type=opt.OPTRequest,
-            unpack_request_fn=opt.unpack_request,
-            pack_response_fn=opt.pack_response,
             model_fn=opt.get_model_fn(args.model_name),
-            batch_manager=opt.BatchManagerForGeneration(
+            batch_manager=opt.OPTBatchManager(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
         )
-        configs.append(config)
+        model_configs.append(mc)
 
-    controller = launch_computron(
-        configs,
+    engine = launch_computron(
+        engine_config,
+        model_configs,
         tp_world_size=args.tp_world_size,
         pp_world_size=args.pp_world_size,
-        n_nodes=1,
-        node_rank=0,
-        controller_kwargs={
-            "max_loaded": 1,
-        },
         # log_dir="logs",
     )
 
-    asyncio.run(make_requests(args.num_requests))
+    asyncio.run(start(args))
