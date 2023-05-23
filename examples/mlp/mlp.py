@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Hashable, Iterable
+from collections.abc import Hashable, Iterable
 
 import colossalai.nn as col_nn
 from computron import BatchManager, SubmitEntry, TaskEntry
@@ -45,7 +45,7 @@ class MLPBatchManager(BatchManager):
         inputs = torch.stack(batch)
         return TaskEntry(tuple(uids), model_id, inputs), {}
 
-    def split_batch(self, task_entry: TaskEntry) -> Iterable[tuple[Hashable, Any]]:
+    def split_batch(self, task_entry: TaskEntry) -> Iterable[tuple[Hashable, object]]:
         ret = []
         for uid, output in zip(task_entry.uids, task_entry.batch):
             ret.append((uid, output))

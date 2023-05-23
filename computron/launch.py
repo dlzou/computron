@@ -1,6 +1,6 @@
+from collections.abc import Callable
 import os
 import sys
-from typing import Any, Callable, Optional
 
 import torch.multiprocessing as mp
 
@@ -27,7 +27,7 @@ def _launch_workers(
     pp_world_size: int,
     n_proc_per_node: int,
     node_rank: int,
-    log_dir: Optional[str] = None,
+    log_dir: str | None = None,
 ):
     ctx = mp.get_context("spawn")
     procs = []
@@ -60,8 +60,8 @@ def launch_computron(
     pp_world_size: int,
     n_nodes: int = 1,
     node_rank: int = 0,
-    log_dir: Optional[str] = None,
-) -> Optional[Engine]:
+    log_dir: str | None = None,
+) -> Engine | None:
     world_size = tp_world_size * pp_world_size
     assert world_size % n_nodes == 0
     n_proc_per_node = world_size // n_nodes

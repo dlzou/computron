@@ -17,7 +17,7 @@ from computron.messages import (
     SubmitEntry,
     TaskEntry,
 )
-from computron.utils import send_obj, recv_obj
+# from computron.utils import send_obj, recv_obj
 
 
 class SubmitQueueFull(Exception):
@@ -27,7 +27,7 @@ class SubmitQueueFull(Exception):
 class LoadState(Enum):
     OFFLOADED = 0
     LOADED = 1
-    LOADING = 2
+    WAITING = 2
 
 
 class EntryCounter:
@@ -89,22 +89,18 @@ class Engine:
             pipe = Pipe(f"{i}_to_m", f"worker{i}", "master")
             self.from_worker_pipes.append(pipe)
         self.submit_pipes: list[Pipe] = []
-        # self.completion_pipes: list[Pipe] = []
         for i, pipe in enumerate(self.from_worker_pipes):
             worker_pp_rank = pipe.recv()
             if worker_pp_rank == 0:
                 self.submit_pipes.append(
                     Pipe(f"m_to_{i}", "master", f"worker{i}", max_size=engine_config.pipe_size)
                 )
-            # if worker_pp_rank == pp_world_size - 1:
-            #     self.completion_pipes.append(pipe)
 
         self.batch_managers: dict[str, BatchManager] = {}
         self.queue_size = engine_config.queue_size
         self.submit_queues: dict[str, deque[SubmitEntry]] = {}
-        # self.can_submit: dict[str, bool] = {}
         self.submit_locks: dict[str, asyncio.Lock] = {}
-        self.loaded: dict[str, LoadState] = {}
+        self.load_states: dict[str, LoadState] = {}
         for mc in model_configs:
             m = mc.model_id
             if mc.batch_manager is None:
@@ -113,8 +109,7 @@ class Engine:
                 assert isinstance(mc.batch_manager, BatchManager)
                 self.batch_managers[m] = mc.batch_manager
             self.submit_queues[m] = deque()
-            # self.submit_locks[m] = asyncio.Lock()
-            self.loaded[m] = LoadState.LOADED # LoadState.OFFLOADED
+            self.load_states[m] = LoadState.OFFLOADED
 
         self.completion_map: dict[Hashable, object] = {}
         self.completion_events: dict[Hashable, asyncio.Event] = {}
@@ -130,22 +125,8 @@ class Engine:
 
         self.logger = get_dist_logger("computron")
         self.logger.info(f"engine started")
-        # self._start()
 
     async def run(self):
-        # loop = asyncio.new_event_loop()
-        # shutdown_signals = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
-        # for s in shutdown_signals:
-        #     loop.add_signal_handler(s, lambda: loop.create_task(self.shutdown(loop)))
-        # # TODO: add exception handler
-        # try:
-        #     loop.create_task(self._request_server())
-        #     loop.create_task(self._submit_loop())
-        #     loop.create_task(self._completion_loop())
-        #     loop.run_forever()
-        # finally:
-        #     loop.close()
-
         self.loop = asyncio.get_running_loop()
         shutdown_signals = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
         for s in shutdown_signals:
@@ -176,103 +157,47 @@ class Engine:
         if self.queue_size > 0 and len(self.submit_queues[model_id]) >= self.queue_size:
             raise SubmitQueueFull(f"{model_id} submit queue full")
         self.completion_events[entry.uid] = asyncio.Event()
-        # async with self.submit_locks[model_id]:
         self.submit_queues[model_id].append(entry)
         # Sleep until request completed
         await self.completion_events[uid].wait()
         del self.completion_events[uid]
         return self.completion_map.pop(uid)
 
-    # async def handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    #     req = await recv_obj(reader)
-    #     if isinstance(req, self.request_type):
-    #         entry: SubmitEntry = self.unpack_request_fn(req)
-    #         assert entry.uid not in self.completion_map
-    #         if self.queue_size > 0 and len(self.submit_queue) >= self.queue_size:
-    #             raise SubmitQueueFull(f"Submit queue full, size: {self.queue_size}")
-    #         self.completion_event[entry.uid] = asyncio.Event()
-    #         self.submit_queue.append(entry)
-    #         # Sleep until completion signal
-    #         await self.completion_event[entry.uid].wait()
-    #         del self.completion_event[entry.uid]
-    #         output = self.completion_map.pop(entry.uid)
-    #         resp = self.pack_response_fn(output)
-    #         await send_obj(writer, resp)
-    #         writer.close()
-    #         await writer.wait_closed()
-
-    #     elif isinstance(req, LoadRequest):
-    #         entry: LoadEntry = LoadEntry(id(req), req.load, req.blocking)
-    #         async with self.submit_cv:
-    #             # if self.can_submit != entry.load:
-    #             for pipe in self.submit_pipes:
-    #                 pipe.send(entry)
-    #             for pipe in self.from_worker_pipes:
-    #                 pipe.recv()
-    #             self.can_submit = entry.load
-    #             if self.can_submit:
-    #                 self.submit_cv.notify()
-    #        # if not entry.blocking:
-    #         #     await send_obj(writer, LoadResponse(success=True))
-    #         #     writer.close()
-    #         #     await writer.wait_closed()
-    #         self.logger.info(f"{self.model_id} loaded state: {entry.load}")
-    #         # if entry.blocking:
-    #         await send_obj(writer, LoadResponse(success=True))
-    #         writer.close()
-    #         await writer.wait_closed()
-
-    #     elif isinstance(req, PingRequest):
-    #         await send_obj(writer, PingResponse())
-    #         writer.close()
-    #         await writer.wait_closed()
-        
-    #     else:
-    #         raise RuntimeError(f"Unknown request type: {type(req)}")
-
-    # async def _request_server(self):
-    #     server = await asyncio.start_server(
-    #         lambda r, w: self.handle_request(r, w),
-    #         self.master_host,
-    #         self.request_port,
-    #     )
-    #     async with server:
-    #         await server.serve_forever()
-
-    async def _swap_in(self, model_id: str):
-        if len(self.evict_queue) >= self.max_loaded:
-            out_model_id = self.evict_queue.pop(0)
-            out_uid = hash((out_model_id, time.time()))
-            out_entry = LoadEntry(out_uid, out_model_id, False, False)
-            for pipe in self.submit_pipes:
-                pipe.send(out_entry)
-            self.loaded[out_model_id] = False
-        uid = hash((model_id, time.time()))
-        entry = LoadEntry(uid, model_id, True, False)
-        self.timer_info[entry.uid] = (0, time.time())
-        self.entry_counters[entry.uid] = EntryCounter(self.world_size)
-        for pipe in self.submit_pipes:
-            pipe.send(entry)
-        self.loaded[model_id] = True
-        self.evict_queue.append(model_id)
-
     async def _submit_loop(self):
         while True:
+            # TODO: more sophisticated scheduling and replacement strategies
+            # Basic round robin schedule + LRU replacement
             for model_id, submit_queue in self.submit_queues.items():
-                # async with self.submit_locks[model_id]:
-                if len(submit_queue) > 0: # and self.loaded[model_id]:
-                    if not self.loaded[model_id]:
-                        await self._swap_in(model_id)
-                    entry, batch_info = self.batch_managers[model_id].make_batch(submit_queue)
-                    self.batch_info[entry.uids] = batch_info
-                    self.timer_info[entry.uids] = (len(entry.uids), time.time())
-                    self.entry_counters[entry.uids] = EntryCounter(self.tp_world_size)
-                    for pipe in self.submit_pipes:
-                        pipe.send(entry)
+                if len(submit_queue) > 0:
+                    if self.load_states[model_id] == LoadState.LOADED:
+                        entry, batch_info = self.batch_managers[model_id].make_batch(submit_queue)
+                        self.batch_info[entry.uids] = batch_info
+                        self.timer_info[entry.uids] = (len(entry.uids), time.time())
+                        self.entry_counters[entry.uids] = EntryCounter(self.tp_world_size)
+                        for pipe in self.submit_pipes:
+                            pipe.send(entry)
+
+                    elif self.load_states[model_id] == LoadState.OFFLOADED:
+                        if len(self.evict_queue) >= self.max_loaded:
+                            out_model_id = self.evict_queue.pop(0)
+                            out_uid = hash((out_model_id, time.time()))
+                            out_entry = LoadEntry(out_uid, out_model_id, False)
+                            self.timer_info[out_uid] = (0, time.time())
+                            self.entry_counters[out_uid] = EntryCounter(self.world_size)
+                            self.load_states[out_model_id] = LoadState.WAITING
+                            for pipe in self.submit_pipes:
+                                pipe.send(out_entry)
+                        uid = hash((model_id, time.time()))
+                        entry = LoadEntry(uid, model_id, True)
+                        self.timer_info[uid] = (0, time.time())
+                        self.entry_counters[uid] = EntryCounter(self.world_size)
+                        self.load_states[model_id] = LoadState.WAITING
+                        for pipe in self.submit_pipes:
+                            pipe.send(entry)
+
             await asyncio.sleep(0)
 
     async def _completion_loop(self):
-        # received_data: dict[int, object] = {}
         while True:
             for pipe in self.from_worker_pipes:
                 try:
@@ -287,35 +212,15 @@ class Engine:
                             f"{entry.model_id} batch size: {batch_size}, time: {time.time() - start_time:.3f}"
                         )
                     elif isinstance(entry, LoadEntry) and self.entry_counters[entry.uid].increment(entry):
-                        pass
+                        _, start_time = self.timer_info.pop(entry.uid)
+                        self.logger.info(
+                            f"{entry.model_id} loaded: {entry.load}, time: {time.time() - start_time:.3f}"
+                        )
+                        if entry.load:
+                            self.evict_queue.append(entry.model_id)
+                            self.load_states[entry.model_id] = LoadState.LOADED
+                        else:
+                            self.load_states[entry.model_id] = LoadState.OFFLOADED
                 except RuntimeError:
                     pass
-
-            # for i, pipe in enumerate(self.completion_pipes):
-            #     if i not in received_data:
-            #         try:
-            #             received_data[i] = pipe.recv_nowait()
-            #         except RuntimeError:
-            #             pass
-            # if len(received_data) == len(self.completion_pipes):
-            #     # TODO: validate all entries are the same
-            #     entries: list[TaskEntry | LoadEntry] = list(
-            #         map(
-            #             lambda k: received_data[k],
-            #             sorted(received_data.keys()),
-            #         )
-            #     )
-            #     received_data.clear()
-            #     entry0 = entries[0]
-            #     if isinstance(entry0, TaskEntry):
-            #         batch_info = self.batch_info.pop(entry0.uids)
-            #         for uid, output in self.batch_managers[entry0.model_id].split_batch(entry0, **batch_info):
-            #             self.completion_map[uid] = output
-            #             self.completion_events[uid].set()
-            #         batch_size, start_time = self.timer_info.pop(entry0.uids)
-            #         self.logger.info(
-            #             f"{entry0.model_id} batch size: {batch_size}, time: {time.time() - start_time:.3f}"
-            #         )
-            #     elif isinstance(entry0, LoadEntry):
-            #         self.completion_events[entry0.uid].set()
             await asyncio.sleep(0)

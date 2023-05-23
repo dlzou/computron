@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
 
 from computron.batch_manager import BatchManager
 
@@ -19,6 +19,6 @@ class EngineConfig:
 class ModelConfig:
     model_id: str
     model_fn: Callable
-    model_kwargs: dict[str, Any] = field(default_factory=dict) 
+    model_kwargs: dict[str, object] = field(default_factory=dict) 
     pipelinable: bool = False
-    batch_manager: Optional[BatchManager] = None
+    batch_manager: BatchManager | None = None

@@ -1,5 +1,5 @@
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Any, Hashable, Tuple
 
 from pydantic import BaseModel
 
@@ -12,28 +12,18 @@ class PingResponse(BaseModel):
     pass
 
 
-# class LoadRequest(BaseModel):
-#     model_id: str
-#     load: bool
-#     blocking: bool
-
-
-# class LoadResponse(BaseModel):
-#     success: bool
-
-
 @dataclass
 class SubmitEntry:
     uid: Hashable
     model_id: str
-    data: Any
+    data: object
 
 
 @dataclass
 class TaskEntry:
-    uids: Tuple[Hashable, ...]
+    uids: tuple[Hashable, ...]
     model_id: str
-    batch: Any
+    batch: object
 
 
 @dataclass
@@ -41,4 +31,3 @@ class LoadEntry:
     uid: Hashable
     model_id: str
     load: bool
-    blocking: bool

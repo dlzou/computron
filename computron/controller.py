@@ -1,3 +1,4 @@
+"""DEPRECATED"""
 from abc import ABC, abstractmethod
 import asyncio
 import time

@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Hashable, Any, Optional
+from collections.abc import Hashable
 
 from colossalai.logging import get_dist_logger
 from computron import BatchManager, SubmitEntry, TaskEntry
@@ -78,7 +78,7 @@ class OPTBatchManager(BatchManager):
 
     def split_batch(
         self, task_entry: TaskEntry, trunc_lens: list[int] = []
-    ) -> list[tuple[Hashable, Any]]:
+    ) -> list[tuple[Hashable, object]]:
         outputs = task_entry.batch["input_ids"]
         retval = []
         for uid, output, trunc_len in zip(task_entry.uids, outputs, trunc_lens):

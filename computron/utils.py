@@ -1,9 +1,8 @@
 import asyncio
 import pickle
-from typing import Any
 
 
-async def send_obj(writer: asyncio.StreamWriter, obj: Any):
+async def send_obj(writer: asyncio.StreamWriter, obj: object):
     bytes = pickle.dumps(obj)
     writer.write(b"%d\n" % len(bytes))
     writer.write(bytes)

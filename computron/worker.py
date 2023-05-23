@@ -12,7 +12,6 @@ from energonai.pipe import Pipe
 from energonai.utils import build_device_maps, Terminator
 import torch
 import torch.distributed.rpc as trpc
-import torch.nn as nn
 
 from computron.launch import EngineConfig, ModelConfig
 from computron.messages import LoadEntry, TaskEntry
@@ -73,8 +72,7 @@ class Worker:
             else:
                 self.models[m] = mc.model_fn(**mc.model_kwargs)
             self.models[m].eval()
-            # self.models[m].to("cpu", non_blocking=True)
-            # self.models[m]._apply(lambda t: t.cpu().pin_memory())
+            self.models[m].to("cpu", non_blocking=True)
 
         self.rpc_name = f"worker{self.global_rank}"
         rpc_options = {}
@@ -161,13 +159,11 @@ class Worker:
                             if entry.load:
                                 with torch.cuda.stream(self.load_stream):
                                     self.models[entry.model_id].to("cuda", non_blocking=True)
-                                    # self.models[entry.model_id]._apply(lambda t: t.cuda())
                                 event = self.load_stream.record_event()
                                 self.wait_load_queue.put((entry, event))
                             else:
                                 with torch.cuda.stream(self.offload_stream):
                                     self.models[entry.model_id].to("cpu", non_blocking=True)
-                                    # self.models[entry.model_id]._apply(lambda t: t.pin_memory())
                                 event = self.offload_stream.record_event()
                                 self.wait_offload_queue.put((entry, event))
                 except RuntimeError:
