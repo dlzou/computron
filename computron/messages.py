@@ -17,6 +17,7 @@ class SubmitEntry:
     uid: Hashable
     model_id: str
     data: object
+    ts: object
 
 
 @dataclass

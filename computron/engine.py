@@ -120,6 +120,7 @@ class Engine:
         self.tasks = []
         self.loop = None
 
+        # LRU state
         self.evict_queue: list[str] = []
         self.max_loaded = engine_config.max_loaded
 
@@ -151,9 +152,10 @@ class Engine:
                 asyncio.get_running_loop().stop()
 
     async def submit(self, model_id: str, data: object):
-        uid = hash((id(data), time.time()))
+        ts = time.time()
+        uid = hash((id(data), ts))
         assert uid not in self.completion_map
-        entry = SubmitEntry(uid, model_id, data)
+        entry = SubmitEntry(uid, model_id, data, ts)
         if self.queue_size > 0 and len(self.submit_queues[model_id]) >= self.queue_size:
             raise SubmitQueueFull(f"{model_id} submit queue full")
         self.completion_events[entry.uid] = asyncio.Event()
@@ -165,33 +167,47 @@ class Engine:
 
     async def _submit_loop(self):
         while True:
-            # TODO: more sophisticated scheduling and replacement strategies
-            # Basic round robin schedule + LRU replacement
+            oldest_ts, oldest_mid = None, None
             for model_id, submit_queue in self.submit_queues.items():
-                if len(submit_queue) > 0:
-                    if self.load_states[model_id] == LoadState.LOADED:
-                        entry, batch_info = self.batch_managers[model_id].make_batch(submit_queue)
-                        self.batch_info[entry.uids] = batch_info
-                        self.timer_info[entry.uids] = (len(entry.uids), time.time())
-                        self.entry_counters[entry.uids] = EntryCounter(self.tp_world_size)
-                        self.evict_queue.remove(model_id)
-                        self.evict_queue.append(model_id)
-                        for pipe in self.submit_pipes:
-                            pipe.send(entry)
+                if len(submit_queue) > 0 and self.load_states[model_id] != LoadState.WAITING:
+                    ts = submit_queue[0].ts
+                    if oldest_ts is None or ts < oldest_ts:
+                        oldest_ts, oldest_mid = ts, model_id
 
-                    elif self.load_states[model_id] == LoadState.OFFLOADED:
-                        if len(self.evict_queue) >= self.max_loaded:
-                            out_model_id = self.evict_queue.pop(0)
-                            out_uid = hash((out_model_id, time.time()))
-                            out_entry = LoadEntry(out_uid, out_model_id, False)
-                            self.timer_info[out_uid] = (0, time.time())
-                            self.entry_counters[out_uid] = EntryCounter(self.world_size)
-                            self.load_states[out_model_id] = LoadState.WAITING
-                            for pipe in self.submit_pipes:
-                                pipe.send(out_entry)
-                        uid = hash((model_id, time.time()))
+            if oldest_mid is not None:
+                model_id, submit_queue = oldest_mid, self.submit_queues[oldest_mid]
+                if self.load_states[model_id] == LoadState.LOADED:
+                    entry, batch_info = self.batch_managers[model_id].make_batch(submit_queue)
+                    self.batch_info[entry.uids] = batch_info
+                    self.timer_info[entry.uids] = (len(entry.uids), time.time())
+                    self.entry_counters[entry.uids] = EntryCounter(self.tp_world_size)
+                    self.evict_queue.remove(model_id)
+                    self.evict_queue.append(model_id)
+                    for pipe in self.submit_pipes:
+                        pipe.send(entry)
+
+                elif self.load_states[oldest_mid] == LoadState.OFFLOADED:
+                    swap = True
+                    if len(self.evict_queue) >= self.max_loaded:
+                        swap = False
+                        for i, out_model_id in enumerate(self.evict_queue):
+                            if self.load_states[out_model_id] == LoadState.LOADED:
+                                swap = True
+                                self.evict_queue.pop(i)
+                                ts = time.time()
+                                out_uid = hash((out_model_id, ts))
+                                out_entry = LoadEntry(out_uid, out_model_id, False)
+                                self.timer_info[out_uid] = (0, ts)
+                                self.entry_counters[out_uid] = EntryCounter(self.world_size)
+                                self.load_states[out_model_id] = LoadState.WAITING
+                                for pipe in self.submit_pipes:
+                                    pipe.send(out_entry)
+                                break
+                    if swap:
+                        ts = time.time()
+                        uid = hash((model_id, ts))
                         entry = LoadEntry(uid, model_id, True)
-                        self.timer_info[uid] = (0, time.time())
+                        self.timer_info[uid] = (0, ts)
                         self.entry_counters[uid] = EntryCounter(self.world_size)
                         self.load_states[model_id] = LoadState.WAITING
                         self.evict_queue.append(entry.model_id)

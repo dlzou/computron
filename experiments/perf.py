@@ -17,7 +17,7 @@ async def make_request(args, i):
     data["top_p"] = 0.5
     data["temperature"] = 0.7
     # target = 0
-    # target = i // (num_reqs // 2)
+    # target = i // (args.num_requests // 2)
     target = i % args.num_models
 
     request_time = time.time()
