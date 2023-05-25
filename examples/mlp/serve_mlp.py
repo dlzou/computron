@@ -4,9 +4,8 @@ from functools import partial
 import time
 
 from computron import EngineConfig, launch_computron, ModelConfig
+from computron.models import mlp
 import torch
-
-import mlp
 
 
 engine = None

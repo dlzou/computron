@@ -19,8 +19,9 @@ classifiers = [
 "Homepage" = "https://github.com/dlzou/cs267-project"
 "Bug Tracker" = "https://github.com/dlzou/cs267-project/issues"
 
-[tool.setuptools]
-packages = ["computron"]
+[tool.setuptools.packages.find]
+include = ["computron*"]
+namespaces = false
 
 [tool.black]
 line-length = 100

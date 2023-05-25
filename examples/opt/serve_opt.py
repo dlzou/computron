@@ -3,7 +3,7 @@ import asyncio
 import time
 
 from computron import EngineConfig, launch_computron, ModelConfig
-import opt
+from computron.models import opt
 
 
 engine = None
@@ -33,7 +33,7 @@ async def start(args):
     engine_task = asyncio.create_task(engine.run())
     request_task = asyncio.create_task(make_requests(args.num_requests))
     await asyncio.gather(engine_task, request_task)
-    await engine.shutdown()
+    # await engine.shutdown()
 
 
 if __name__ == "__main__":

@@ -174,6 +174,8 @@ class Engine:
                         self.batch_info[entry.uids] = batch_info
                         self.timer_info[entry.uids] = (len(entry.uids), time.time())
                         self.entry_counters[entry.uids] = EntryCounter(self.tp_world_size)
+                        self.evict_queue.remove(model_id)
+                        self.evict_queue.append(model_id)
                         for pipe in self.submit_pipes:
                             pipe.send(entry)
 
@@ -192,6 +194,7 @@ class Engine:
                         self.timer_info[uid] = (0, time.time())
                         self.entry_counters[uid] = EntryCounter(self.world_size)
                         self.load_states[model_id] = LoadState.WAITING
+                        self.evict_queue.append(entry.model_id)
                         for pipe in self.submit_pipes:
                             pipe.send(entry)
 
@@ -217,7 +220,6 @@ class Engine:
                             f"{entry.model_id} loaded: {entry.load}, time: {time.time() - start_time:.3f}"
                         )
                         if entry.load:
-                            self.evict_queue.append(entry.model_id)
                             self.load_states[entry.model_id] = LoadState.LOADED
                         else:
                             self.load_states[entry.model_id] = LoadState.OFFLOADED

@@ -1,3 +1,6 @@
 [submodule "energonai"]
 	path = energonai
 	url = git@github.com:dlzou/EnergonAI.git
+[submodule "alpa_serve"]
+	path = alpa_serve
+	url = git@github.com:dlzou/AlpaServe.git

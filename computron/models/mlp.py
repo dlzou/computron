@@ -8,7 +8,7 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(self, offset, dim: int = 256):
+    def __init__(self, offset: int = 0, dim: int = 256):
         super().__init__()
         intermediate_dim = dim * 4
         self.dense_1 = col_nn.Linear1D_Col(dim, intermediate_dim)

@@ -3,7 +3,7 @@ import time
 
 from computron import launch_computron, ModelConfig
 
-import echo
+from computron.models import echo
 
 
 ctlr = None

@@ -3,9 +3,9 @@ import os
 import time
 
 from computron import launch_computron, ModelConfig
+from computron.models import vit
 
 from proc_img import proc_img
-import vit
 
 
 controller = None

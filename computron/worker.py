@@ -190,7 +190,7 @@ class Worker:
                 load_event.synchronize()
                 self.to_master_pipe.send(entry)
             else:
-                time.sleep(0.05)
+                time.sleep(0.02)
 
     def _wait_offload_fn(self):
         while True:
@@ -199,4 +199,4 @@ class Worker:
                 load_event.synchronize()
                 self.to_master_pipe.send(entry)
             else:
-                time.sleep(0.05)
+                time.sleep(0.02)
