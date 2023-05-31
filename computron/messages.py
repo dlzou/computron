@@ -1,16 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass
 
-from pydantic import BaseModel
-
-
-class PingRequest(BaseModel):
-    pass
-
-
-class PingResponse(BaseModel):
-    pass
-
 
 @dataclass
 class SubmitEntry:

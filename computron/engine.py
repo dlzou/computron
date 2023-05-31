@@ -54,7 +54,7 @@ class EntryCounter:
 class Engine:
     """
     Adapted from https://github.com/hpcaitech/EnergonAI/blob/main/energonai/engine.py
-    with significant chagnes.
+    with significant changes.
     """
 
     def __init__(
@@ -64,6 +64,7 @@ class Engine:
         tp_world_size: int,
         pp_world_size: int,
         n_proc_per_node: int,
+        log_dir: str | None = None,
     ):
         self.tp_world_size = tp_world_size
         self.pp_world_size = pp_world_size
@@ -125,6 +126,8 @@ class Engine:
         self.max_loaded = engine_config.max_loaded
 
         self.logger = get_dist_logger("computron")
+        if log_dir is not None:
+            self.logger.log_to_file(log_dir, mode="w", suffix="master")
         self.logger.info(f"engine started")
 
     async def run(self):

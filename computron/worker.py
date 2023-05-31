@@ -20,7 +20,7 @@ from computron.messages import LoadEntry, TaskEntry
 class Worker:
     """
     Adapted from https://github.com/hpcaitech/EnergonAI/blob/main/energonai/worker.py
-    with significant chagnes.
+    with significant changes.
     """
 
     def __init__(
@@ -31,6 +31,7 @@ class Worker:
         tp_world_size: int,
         pp_world_size: int,
         n_proc_per_node: int,
+        log_dir: str = None,
     ):
         self.global_rank = rank
         self.world_size = tp_world_size * pp_world_size
@@ -133,6 +134,8 @@ class Worker:
         self.wait_offload_thread.start()
 
         self.logger = get_dist_logger("computron")
+        if log_dir is not None:
+            self.logger.log_to_file(log_dir, mode="w", suffix=self.rpc_name)
         self.logger.info(f"{self.rpc_name} started")
         self._start()
 

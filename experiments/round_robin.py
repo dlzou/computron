@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import os
 import time
 
 from computron import EngineConfig, launch_computron, ModelConfig
@@ -22,13 +23,12 @@ async def make_request(args, i):
 
     request_time = time.time()
     output = await engine.submit(f"opt{target}", data)
-    print(f"Response time {i}: {time.time() - request_time}")
+    response_time = time.time() - request_time
+    logging.info(f"{i} response time: {response_time}")
+    print(f"{i} response time: {response_time}")
     output = opt.tokenizer.decode(output, skip_special_tokens=True)
     print(output)
 
-    # logging.info(f"{i} load time: {timers['load']}")
-    # logging.info(f"{i} model time: {timers['model']}")
-    # logging.info(f"{i} response time: {time.time() - request_time}")
 
 
 async def make_blocking_requests(args):
@@ -50,6 +50,18 @@ async def start(args):
     await engine.shutdown()
 
 
+def encode_args(args):
+    s = "rr"
+    s += f"_{args.model_name}"
+    s += f"_n{args.num_models}"
+    s += f"_t{args.tp_world_size}"
+    s += f"_p{args.pp_world_size}"
+    s += f"_r{args.num_requests}"
+    if args.blocking:
+        s += "_b"
+    return s
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model-name", default="opt-1.3b")
@@ -60,6 +72,17 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--blocking", action="store_true")
     args = parser.parse_args()
     print(args)
+
+    log_dir = encode_args(args)
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), log_dir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    logging.basicConfig(
+        filename=os.path.join(log_dir, "client.log"),
+        filemode="w",
+        level=logging.INFO,
+    )
 
     # logging.basicConfig(
     #     filename=f"perf_logs/round_robin_{args.model_name}_{args.tp_world_size}_{args.pp_world_size}.log", 
@@ -93,7 +116,7 @@ if __name__ == "__main__":
         model_configs,
         tp_world_size=args.tp_world_size,
         pp_world_size=args.pp_world_size,
-        # log_dir="logs",
+        log_dir=log_dir,
     )
 
     time.sleep(10)
