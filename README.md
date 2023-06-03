@@ -22,6 +22,6 @@ conda activate computron
 pip install torch==1.13 torchvision
 pip install colossalai transformers
 pip install -e energonai/
-pip install -e alpa/
+pip install -e alpa_serve/
 pip install -e .
 ```

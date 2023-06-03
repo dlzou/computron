@@ -22,13 +22,14 @@ async def make_request(args, i):
     target = i % args.num_models
 
     request_time = time.time()
+    print(f"{i} request waiting")
     output = await engine.submit(f"opt{target}", data)
     response_time = time.time() - request_time
-    logging.info(f"{i} response time: {response_time}")
+    if not args.no_log:
+        logging.info(f"{i} response time: {response_time}")
     print(f"{i} response time: {response_time}")
     output = opt.tokenizer.decode(output, skip_special_tokens=True)
     print(output)
-
 
 
 async def make_blocking_requests(args):
@@ -70,19 +71,23 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--pp-world-size", type=int, default=1)
     parser.add_argument("-r", "--num-requests", type=int, default=24)
     parser.add_argument("-b", "--blocking", action="store_true")
+    parser.add_argument("-x", "--no-log", action="store_true")
     args = parser.parse_args()
     print(args)
 
-    log_dir = encode_args(args)
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), log_dir)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    if args.no_log:
+        log_dir = None
+    else:
+        log_dir = encode_args(args)
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), log_dir)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
 
-    logging.basicConfig(
-        filename=os.path.join(log_dir, "client.log"),
-        filemode="w",
-        level=logging.INFO,
-    )
+        logging.basicConfig(
+            filename=os.path.join(log_dir, "client.log"),
+            filemode="w",
+            level=logging.INFO,
+        )
 
     # logging.basicConfig(
     #     filename=f"perf_logs/round_robin_{args.model_name}_{args.tp_world_size}_{args.pp_world_size}.log", 
