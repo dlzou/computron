@@ -89,16 +89,6 @@ if __name__ == "__main__":
             level=logging.INFO,
         )
 
-    # logging.basicConfig(
-    #     filename=f"perf_logs/round_robin_{args.model_name}_{args.tp_world_size}_{args.pp_world_size}.log", 
-    #     filemode="w",
-    #     level=logging.DEBUG
-    # )
-    # logging.info("==== New Run ====")
-    # logging.info("Num models: {}".format(args.num_models))
-    # logging.info("TP world size: {}".format(args.tp_world_size))
-    # logging.info("PP world size: {}".format(args.pp_world_size))
-
     engine_config = EngineConfig(
         master_host="localhost",
         master_port=29600,

@@ -217,7 +217,7 @@ class Engine:
                         for pipe in self.submit_pipes:
                             pipe.send(entry)
 
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
 
     async def _completion_loop(self):
         while True:
@@ -244,4 +244,4 @@ class Engine:
                             self.load_states[entry.model_id] = LoadState.OFFLOADED
                 except RuntimeError:
                     pass
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
