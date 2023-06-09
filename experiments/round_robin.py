@@ -4,7 +4,7 @@ import logging
 import os
 import time
 
-from computron import EngineConfig, launch_computron, ModelConfig
+from computron import EngineConfig, ModelConfig, launch_computron
 from computron.models import opt
 
 
@@ -51,7 +51,7 @@ async def start(args):
     await engine.shutdown()
 
 
-def encode_args(args):
+def get_log_dir(args):
     s = "rr"
     s += f"_{args.model_name}"
     s += f"_n{args.num_models}"
@@ -65,7 +65,7 @@ def encode_args(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model-name", default="opt-1.3b")
+    parser.add_argument("model_name", nargs="?", default="opt-1.3b")
     parser.add_argument("-n", "--num-models", type=int, default=2)
     parser.add_argument("-t", "--tp-world-size", type=int, default=1)
     parser.add_argument("-p", "--pp-world-size", type=int, default=1)
@@ -78,11 +78,10 @@ if __name__ == "__main__":
     if args.no_log:
         log_dir = None
     else:
-        log_dir = encode_args(args)
+        log_dir = get_log_dir(args)
         log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), log_dir)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-
         logging.basicConfig(
             filename=os.path.join(log_dir, "client.log"),
             filemode="w",
@@ -114,5 +113,4 @@ if __name__ == "__main__":
         log_dir=log_dir,
     )
 
-    time.sleep(10)
     asyncio.run(start(args))

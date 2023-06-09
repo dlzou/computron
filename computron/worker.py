@@ -159,6 +159,13 @@ class Worker:
                         if self.pp_rank < (self.pp_world_size - 1):
                             self.output_pipe.send(entry)
                         with torch.inference_mode():
+                            # with torch.cuda.stream(self.load_stream):
+                            #     if entry.load:
+                            #         self.models[entry.model_id].to("cuda", non_blocking=True)
+                            #     else:
+                            #         self.models[entry.model_id].to("cpu", non_blocking=True)
+                            # event = self.load_stream.record_event()
+                            # self.wait_load_queue.put((entry, event))
                             if entry.load:
                                 with torch.cuda.stream(self.load_stream):
                                     self.models[entry.model_id].to("cuda", non_blocking=True)
