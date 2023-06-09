@@ -35,8 +35,10 @@ configs = [
     Config((10, 10, 1), 0.25, 2),
     Config((10, 10, 1), 1, 2),
     Config((10, 10, 1), 4, 2),
-    Config((1, 1), 1, 1),
+    Config((1, 1, 1), 1, 1),
     Config((10, 10), 1, 1),
+    Config((10, 10, 1), 1, 1),
+    Config((10, 1, 1), 1, 1),
 ]
 
 
@@ -48,10 +50,10 @@ async def make_request(index, target):
     data["temperature"] = 0.7
 
     request_time = time.time()
-    print(f"{index} request to {target} waiting")
+    log_fn(f"req{index} model: {target}")
     output = await engine.submit(target, data)
     response_time = time.time() - request_time
-    log_fn(f"{index} model: {target}, response time: {response_time}")
+    log_fn(f"resp{index} model: {target}, response time: {response_time}")
     output = opt.tokenizer.decode(output, skip_special_tokens=True)
     print(output)
 
