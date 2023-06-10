@@ -146,7 +146,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config", type=int, default=0)
     parser.add_argument("-t", "--tp-world-size", type=int, default=1)
     parser.add_argument("-p", "--pp-world-size", type=int, default=1)
-    parser.add_argument("-b", "--batch-size", type=int, default=8)
+    parser.add_argument("-b", "--batch-size", type=int, default=32)
     parser.add_argument("-d", "--duration", type=int, default=30)
     parser.add_argument("-x", "--no-log", action="store_true")
     args = parser.parse_args()
