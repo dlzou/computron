@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 import torch
 from pydantic import BaseModel
 
-from computron import launch_multi_model
+from computron import launch_computron
 
 
 app = FastAPI()

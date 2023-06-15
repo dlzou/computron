@@ -1,9 +1,9 @@
 import asyncio
 import time
 
-from computron import launch_multi_model, ModelConfig
+from computron import launch_computron, ModelConfig
 
-import echo
+from computron.models import echo
 
 
 ctlr = None
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         )
         configs.append(config)
 
-    ctlr = launch_multi_model(
+    ctlr = launch_computron(
         configs,
         tp_world_size=1,
         pp_world_size=1,

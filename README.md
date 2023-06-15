@@ -14,8 +14,14 @@ Clone this repo:
 git clone --recurse-submodules git@github.com:dlzou/cs267-project.git
 ```
 
-Create an environment and install Energon-AI and AlpaServe from the included submodules. Then, install Computron from source:
+Create an environment, install torch and Colossal-AI from PIP, then install Energon-AI and AlpaServe from the included submodules. Finally, install Computron from source.
 
 ```shell
+conda create -n computron python=3.10
+conda activate computron
+pip install torch==1.13 torchvision
+pip install colossalai transformers
+pip install -e energonai/
+pip install -e alpa_serve/
 pip install -e .
 ```

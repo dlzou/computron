@@ -3,9 +3,8 @@ from functools import partial
 import time
 
 from energonai import launch_engine
+from computron.models import mlp
 import torch
-
-import mlp
 
 
 engine = None
@@ -36,5 +35,5 @@ if __name__ == "__main__":
         model_fn=partial(mlp.MLP, dim=256),
     )
 
-    time.sleep(15)  # Wait for engine to start
-    asyncio.run(make_requests(10))
+    time.sleep(10)  # Wait for engine to start
+    asyncio.run(make_requests(12))

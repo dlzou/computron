@@ -1,10 +1,12 @@
+"""DEPRECATED"""
 from abc import ABC, abstractmethod
 import asyncio
+import time
 from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
 
-from computron.messages import PingRequest, OffloadRequest, OffloadResponse
+from computron.messages import PingRequest, LoadRequest, LoadResponse
 from computron.utils import send_obj, recv_obj
 
 
@@ -16,7 +18,7 @@ Ideas for more controllers with more sophisticated offloading and scheduling str
 """
 
 
-class Controller:
+class Controller(ABC):
     """Dispatch requests to the target model, performing offloading as needed."""
 
     @abstractmethod
@@ -72,17 +74,17 @@ class LRUController(Controller):
         if swap_out:
             out_model_id = self.evict_queue.pop(0)
             out_reader, out_writer = await asyncio.open_connection(*self.engines[out_model_id])
-            load_req = OffloadRequest(load=False, flush=True)
+            load_req = LoadRequest(load=False, blocking=True)
             await send_obj(out_writer, load_req)
-            load_resp: OffloadResponse = await recv_obj(out_reader)
+            load_resp: LoadResponse = await recv_obj(out_reader)
             assert load_resp.success
             self.loaded[out_model_id] = False
             out_writer.close()
 
         in_reader, in_writer = await asyncio.open_connection(*self.engines[in_model_id])
-        load_req = OffloadRequest(load=True, flush=False)
+        load_req = LoadRequest(load=True, blocking=True)
         await send_obj(in_writer, load_req)
-        load_resp: OffloadResponse = await recv_obj(in_reader)
+        load_resp: LoadResponse = await recv_obj(in_reader)
         assert load_resp.success
         in_writer.close()
 
@@ -93,16 +95,21 @@ class LRUController(Controller):
         await in_writer.wait_closed()
 
     async def handle_request(self, model_id: str, req: BaseModel):
+        timers = {}
         async with self.request_lock:
+            start_load = time.time()
             if not self.loaded[model_id]:
                 await self._swap_in(model_id)
             else:
                 self.evict_queue.remove(model_id)
                 self.evict_queue.append(model_id)
+            timers["load"] = time.time() - start_load
             reader, writer = await asyncio.open_connection(*self.engines[model_id])
+            start_model = time.time()
             await send_obj(writer, req)
 
         resp = await recv_obj(reader)
+        timers["model"] = time.time() - start_model
         writer.close()
         await writer.wait_closed()
-        return resp
+        return resp, timers

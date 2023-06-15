@@ -1,17 +1,11 @@
+import asyncio
 import os
+import time
 import torch
 
-# import uvicorn
-# # from fastapi import FastAPI
-# # from fastapi import Response
-# import torch.distributed.rpc as rpc
+from computron.models import vit
 from energonai import launch_engine
 
-# from energonai.engine import InferenceEngine
-from proc_img import proc_img
-import time
-import vit
-import asyncio
 from proc_img import proc_img
 
 
@@ -19,7 +13,10 @@ async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
         img = proc_img(
-            "/data/yusun/xueyang/cs267/cs267-project/examples/vit/dataset/n01667114_9985.JPEG"
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "dataset/n01667114_9985.JPEG",
+            )
         )
         data = torch.unsqueeze(img, 0)
         uid = id(data)

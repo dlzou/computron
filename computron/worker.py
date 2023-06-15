@@ -1,6 +1,7 @@
-import time
 from contextlib import contextmanager
-from typing import Any, Callable
+from queue import Queue
+import threading
+import time
 
 import colossalai
 from colossalai.context import ParallelMode
@@ -8,30 +9,29 @@ from colossalai.core import global_context as gpc
 from colossalai.logging import disable_existing_loggers, get_dist_logger
 from colossalai.pipeline.pipelinable import PipelinableContext
 from energonai.pipe import Pipe
-from energonai.task import TaskEntry
 from energonai.utils import build_device_maps, Terminator
 import torch
 import torch.distributed.rpc as trpc
-import torch.nn as nn
 
-from computron.messages import OffloadEntry
+from computron.launch import EngineConfig, ModelConfig
+from computron.messages import LoadEntry, TaskEntry
 
 
-class OffloadingWorker:
+class Worker:
+    """
+    Adapted from https://github.com/hpcaitech/EnergonAI/blob/main/energonai/worker.py
+    with significant changes.
+    """
+
     def __init__(
         self,
+        engine_config: EngineConfig,
+        model_configs: list[ModelConfig],
         rank: int,
         tp_world_size: int,
         pp_world_size: int,
-        master_host: str,
-        master_port: int,
-        rpc_port: int,
         n_proc_per_node: int,
-        model_fn: Callable[[Any], nn.Module],
-        pipelinable: bool = False,
-        pipe_size: int = 1,
-        rpc_disable_shm: bool = True,
-        **model_kwargs: Any,
+        log_dir: str = None,
     ):
         self.global_rank = rank
         self.world_size = tp_world_size * pp_world_size
@@ -47,8 +47,8 @@ class OffloadingWorker:
             },
             rank,
             self.world_size,
-            master_host,
-            master_port,
+            engine_config.master_host,
+            engine_config.master_port,
         )
         self.tp_rank = gpc.get_local_rank(ParallelMode.PARALLEL_1D)
         self.pp_rank = (
@@ -56,27 +56,28 @@ class OffloadingWorker:
             if gpc.is_initialized(ParallelMode.PIPELINE)
             else 0
         )
-
-        if pipelinable:
-            pctx = PipelinableContext()
-            with pctx:
-                self.model = model_fn(**model_kwargs)
-            pctx.to_layer_list()
-            pctx.policy = "uniform"
-            self.model: nn.Module = pctx.partition(
-                num_chunks=1,
-                pipeline_size=pp_world_size,
-                rank=self.pp_rank,
-            )
-        else:
-            self.model: nn.Module = model_fn(**model_kwargs)
-        self.model.eval()
-        self.model.to("cpu")
-        torch.cuda.empty_cache()
+        self.models = {}
+        for mc in model_configs:
+            m = mc.model_id
+            if mc.pipelinable:
+                pctx = PipelinableContext()
+                with pctx:
+                    _ = mc.model_fn(**mc.model_kwargs)
+                pctx.to_layer_list()
+                pctx.policy = "uniform"
+                self.models[m] = pctx.partition(
+                    num_chunks=1,
+                    pipeline_size=pp_world_size,
+                    rank=self.pp_rank,
+                )
+            else:
+                self.models[m] = mc.model_fn(**mc.model_kwargs)
+            self.models[m].eval()
+            self.models[m].to("cpu", non_blocking=True)
 
         self.rpc_name = f"worker{self.global_rank}"
         rpc_options = {}
-        if rpc_disable_shm:
+        if engine_config.rpc_disable_shm:
             # SHM may lead to timeout error. Disabling SHM and only enabling uv transport can solve this problem.
             # See https://discuss.pytorch.org/t/rpc-behavior-difference-between-pytorch-1-7-0-vs-1-9-0/124772/5
             # This is a workaround and may be solved in the future.
@@ -86,7 +87,7 @@ class OffloadingWorker:
             rank=self.global_rank + 1,
             world_size=self.world_size + 1,
             rpc_backend_options=trpc.TensorPipeRpcBackendOptions(
-                init_method=f"tcp://{master_host}:{rpc_port}",
+                init_method=f"tcp://{engine_config.master_host}:{engine_config.rpc_port}",
                 device_maps=build_device_maps(
                     self.world_size, n_proc_per_node, rank=self.global_rank
                 ),
@@ -98,7 +99,7 @@ class OffloadingWorker:
 
         if self.pp_rank == 0:
             self.input_pipe = Pipe(
-                f"m_to_{self.global_rank}", "master", self.rpc_name, max_size=pipe_size
+                f"m_to_{self.global_rank}", "master", self.rpc_name, max_size=engine_config.pipe_size
             )
         else:
             pp_prev_rank = gpc.get_prev_global_rank(ParallelMode.PIPELINE)
@@ -106,7 +107,7 @@ class OffloadingWorker:
                 f"{pp_prev_rank}_to_{self.global_rank}",
                 f"worker{pp_prev_rank}",
                 self.rpc_name,
-                max_size=pipe_size,
+                max_size=engine_config.pipe_size,
             )
         if self.pp_rank == self.pp_world_size - 1:
             self.output_pipe = self.to_master_pipe
@@ -116,11 +117,26 @@ class OffloadingWorker:
                 f"{self.global_rank}_to_{pp_next_rank}",
                 self.rpc_name,
                 f"worker{pp_next_rank}",
-                max_size=pipe_size,
+                max_size=engine_config.pipe_size,
             )
+        
+        self.compute_stream = torch.cuda.default_stream()
+        self.load_stream = torch.cuda.Stream()
+        self.offload_stream = torch.cuda.Stream()
+        self.wait_load_queue = Queue()
+        self.wait_offload_queue = Queue()
+
+        self.wait_load_thread = threading.Thread(target=self._wait_load_fn)
+        self.wait_load_thread.daemon = True
+        self.wait_offload_thread = threading.Thread(target=self._wait_offload_fn)
+        self.wait_offload_thread.daemon = True
+        self.wait_load_thread.start()
+        self.wait_offload_thread.start()
 
         self.logger = get_dist_logger("computron")
-        self.logger.info(f"{self.rpc_name} start")
+        if log_dir is not None:
+            self.logger.log_to_file(log_dir, mode="w", suffix=self.rpc_name)
+        self.logger.info(f"{self.rpc_name} started")
         self._start()
 
     @contextmanager
@@ -137,16 +153,29 @@ class OffloadingWorker:
                     entry = self.input_pipe.recv_nowait()
                     if isinstance(entry, TaskEntry):
                         with torch.inference_mode():
-                            outputs = self._forward(entry.batch)
-                        self.output_pipe.send(TaskEntry(entry.uids, outputs))
-                    elif isinstance(entry, OffloadEntry):
+                            outputs = self._forward(entry.model_id, entry.batch)
+                        self.output_pipe.send(TaskEntry(entry.uids, entry.model_id, outputs))
+                    elif isinstance(entry, LoadEntry):
+                        if self.pp_rank < (self.pp_world_size - 1):
+                            self.output_pipe.send(entry)
                         with torch.inference_mode():
+                            # with torch.cuda.stream(self.load_stream):
+                            #     if entry.load:
+                            #         self.models[entry.model_id].to("cuda", non_blocking=True)
+                            #     else:
+                            #         self.models[entry.model_id].to("cpu", non_blocking=True)
+                            # event = self.load_stream.record_event()
+                            # self.wait_load_queue.put((entry, event))
                             if entry.load:
-                                self.model.to("cuda", non_blocking=True)
+                                with torch.cuda.stream(self.load_stream):
+                                    self.models[entry.model_id].to("cuda", non_blocking=True)
+                                event = self.load_stream.record_event()
+                                self.wait_load_queue.put((entry, event))
                             else:
-                                self.model.to("cpu", non_blocking=True)
-                                torch.cuda.empty_cache()
-                        self.output_pipe.send(entry)
+                                with torch.cuda.stream(self.offload_stream):
+                                    self.models[entry.model_id].to("cpu", non_blocking=True)
+                                event = self.offload_stream.record_event()
+                                self.wait_offload_queue.put((entry, event))
                 except RuntimeError:
                     time.sleep(0.01)
 
@@ -155,11 +184,29 @@ class OffloadingWorker:
         trpc.rpc_sync("master", Terminator.terminate)
         trpc.shutdown()
 
-    def _forward(self, inputs: Any) -> Any:
+    def _forward(self, model_id: str, inputs: object) -> object:
         if isinstance(inputs, (tuple, list)):
-            outputs = self.model(*inputs)
+            outputs = self.models[model_id](*inputs)
         elif isinstance(inputs, dict):
-            outputs = self.model(**inputs)
+            outputs = self.models[model_id](**inputs)
         else:
-            outputs = self.model(inputs)
+            outputs = self.models[model_id](inputs)
         return outputs
+
+    def _wait_load_fn(self):
+        while True:
+            if not self.wait_load_queue.empty():
+                entry, load_event = self.wait_load_queue.get_nowait()
+                load_event.synchronize()
+                self.to_master_pipe.send(entry)
+            else:
+                time.sleep(0.02)
+
+    def _wait_offload_fn(self):
+        while True:
+            if not self.wait_offload_queue.empty():
+                entry, load_event = self.wait_offload_queue.get_nowait()
+                load_event.synchronize()
+                self.to_master_pipe.send(entry)
+            else:
+                time.sleep(0.02)
