@@ -1,54 +1,62 @@
+import argparse
 import asyncio
 import time
 
-from computron import launch_computron, ModelConfig
+from computron import EngineConfig, ModelConfig, launch_computron
 
 from computron.models import echo
 
 
-ctlr = None
+engine = None
 
 
 async def make_requests(num_reqs):
     start_time = time.time()
     for i in range(num_reqs):
-        req = echo.EchoRequest(data=f"hello world {i}")
-        target = i % 2
+        data = f"hello world {i}"
         # target = i // (num_reqs // 2)
-        resp = await ctlr.handle_request(f"echo{target}", req)
-        print(f"Response time {i}: {time.time() - start_time}")
-        print(resp)
+        target = i % 2
+        print(f"Making request {i}")
+        req_time = time.time()
+        output = await engine.submit(f"echo{target}", data)
+        print(f"Response time {i}: {time.time() - req_time}")
+        print(output)
     print(f"Total time: {time.time() - start_time}")
 
 
+async def start(args):
+    engine_task = asyncio.create_task(engine.run())
+    request_task = asyncio.create_task(make_requests(args.num_requests))
+    await asyncio.gather(engine_task, request_task)
+    await engine.shutdown()
+
+
 if __name__ == "__main__":
-    num_models = 2
-    first_port = 29600
-    configs = []
-    for i in range(num_models):
-        config = ModelConfig(
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-n", "--num-models", type=int, default=2)
+    parser.add_argument("-r", "--num-requests", type=int, default=12)
+    args = parser.parse_args()
+    print(args)
+
+    engine_config = EngineConfig(
+        master_host="localhost",
+        master_port=29600,
+        rpc_port=29601,
+        max_loaded=1,
+    )
+    model_configs = []
+    for i in range(args.num_models):
+        mc = ModelConfig(
             model_id=f"echo{i}",
-            master_host="localhost",
-            master_port=(first_port + 3 * i),
-            rpc_port=(first_port + 3 * i + 1),
-            request_port=(first_port + 3 * i + 2),
-            request_type=echo.EchoRequest,
-            unpack_request_fn=echo.unpack_request,
-            pack_response_fn=echo.pack_response,
             model_fn=echo.Echo,
         )
-        configs.append(config)
+        model_configs.append(mc)
 
-    ctlr = launch_computron(
-        configs,
+    engine = launch_computron(
+        engine_config,
+        model_configs,
         tp_world_size=1,
         pp_world_size=1,
-        n_nodes=1,
-        node_rank=0,
-        controller_kwargs={
-            "max_loaded": 1,
-        },
     )
 
-    time.sleep(5)
-    asyncio.run(make_requests(10))
+    asyncio.run(start(args))

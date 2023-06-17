@@ -1,14 +1,13 @@
 import os
-from typing import Any, Deque, Hashable, List, Tuple, Union
+from collections import deque
+from collections.abc import Hashable
 
 from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.logging import get_dist_logger
 from colossalai.pipeline.pipelinable import PipelinableContext
 from colossalai.utils import is_using_pp
-from computron import LoadEntry, OffloadingBatchManager
-from energonai import SubmitEntry, TaskEntry
-from pydantic import BaseModel
+from computron import BatchManager, SubmitEntry, TaskEntry
 from titans.model.vit.vit import _create_vit_model
 import torch
 
@@ -107,47 +106,27 @@ def create_vit():
     return model
 
 
-class ViTRequest(BaseModel):
-    data: Any
-
-
-class ViTResponse(BaseModel):
-    output: Any
-
-
-def unpack_request(req: ViTRequest) -> SubmitEntry:
-    return SubmitEntry(id(req), req.data)
-
-
-def pack_response(output: Any) -> ViTResponse:
-    return ViTResponse(output=output)
-
-
-class ViTBatchManager(OffloadingBatchManager):
+class ViTBatchManager(BatchManager):
     def __init__(self, max_batch_size: int = 1):
         self.max_batch_size = max_batch_size
 
     def make_batch(
-        self, q: Deque[Union[SubmitEntry, LoadEntry]]
-    ) -> Tuple[Union[TaskEntry, LoadEntry], dict]:
+        self, q: deque[SubmitEntry]
+    ) -> tuple[TaskEntry, dict]:
         entry = q.popleft()
-        if isinstance(entry, LoadEntry):
-            return entry, {}
-
         uids = [entry.uid]
+        model_id = entry.model_id
         batch = [entry.data]
         while len(batch) < self.max_batch_size:
             if len(q) == 0:
-                break
-            if isinstance(q[0], LoadEntry):
                 break
             entry = q.popleft()
             uids.append(entry.uid)
             batch.append(entry.data)
         inputs = torch.stack(batch)
-        return TaskEntry(tuple(uids), inputs), {}
+        return TaskEntry(tuple(uids), model_id, inputs), {}
 
-    def split_batch(self, task_entry: TaskEntry) -> List[Tuple[Hashable, Any]]:
+    def split_batch(self, task_entry: TaskEntry) -> list[tuple[Hashable, object]]:
         ret = []
         for uid, output in zip(task_entry.uids, task_entry.batch):
             ret.append((uid, output))

@@ -33,12 +33,12 @@ async def start(args):
     engine_task = asyncio.create_task(engine.run())
     request_task = asyncio.create_task(make_requests(args.num_requests))
     await asyncio.gather(engine_task, request_task)
-    # await engine.shutdown()
+    await engine.shutdown()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model-name", default="opt-1.3b")
+    parser.add_argument("model_name", nargs="?", default="opt-1.3b")
     parser.add_argument("-n", "--num-models", type=int, default=2)
     parser.add_argument("-t", "--tp-world-size", type=int, default=1)
     parser.add_argument("-p", "--pp-world-size", type=int, default=1)
