@@ -1,5 +1,6 @@
 from collections import deque
 from collections.abc import Hashable
+from functools import partial
 
 from colossalai.logging import get_dist_logger
 from computron import BatchManager, SubmitEntry, TaskEntry
@@ -13,7 +14,7 @@ logger = get_dist_logger("colossalai")
 tokenizer = AutoTokenizer.from_pretrained("facebook/opt-30b")
 
 
-def get_model_fn(model_name: str):
+def get_model_fn(model_name: str, checkpoint: str | None = None):
     model_map = {
         "opt-125m": opt_125M,
         "opt-1.3b": opt_1B,
@@ -22,6 +23,8 @@ def get_model_fn(model_name: str):
         "opt-30b": opt_30B,
         "opt-175b": opt_175B,
     }
+    if checkpoint is not None and checkpoint != "":
+        return partial(model_map[model_name], checkpoint=checkpoint)
     return model_map[model_name]
 
 

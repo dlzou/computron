@@ -43,6 +43,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--tp-world-size", type=int, default=1)
     parser.add_argument("-p", "--pp-world-size", type=int, default=1)
     parser.add_argument("-r", "--num-requests", type=int, default=12)
+    parser.add_argument("-c", "--checkpoint", type=str, default="")
     args = parser.parse_args()
     print(args)
     
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     for i in range(args.num_models):
         mc = ModelConfig(
             model_id=f"opt{i}",
-            model_fn=opt.get_model_fn(args.model_name),
+            model_fn=opt.get_model_fn(args.model_name, args.checkpoint),
             batch_manager=opt.OPTBatchManager(
                 max_batch_size=4, pad_token_id=opt.tokenizer.pad_token_id
             ),
